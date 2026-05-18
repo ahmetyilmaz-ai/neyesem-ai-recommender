@@ -1,0 +1,560 @@
+{
+  "type": "cold_start_homepage_recommendations",
+  "description": "Kullanıcı geçmişi olmadan fiyat, kategori, indirim ve ürün içeriğine göre oluşturulan ana sayfa önerileri.",
+  "section_count": 6,
+  "sections": [
+    {
+      "title": "Uygun Fiyatlı Doyurucular",
+      "description": "Fiyatı görece uygun, ana yemek sayılabilecek doyurucu seçenekler.",
+      "items": [
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Emrah Dönmez Pide & Kebap & Döner, Osmangazi (Altınova Mah.)",
+          "item_name": "Kumru Dürüm",
+          "price": 180.0,
+          "original_price": 180.0,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/emrah-donmez-pide-kebap-doner-osmangazi-altinova-mah-osmangazi-bursa-2/",
+          "city": "bursa",
+          "score": 1.09
+        },
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Emrah Dönmez Pide & Kebap & Döner, Osmangazi (Altınova Mah.)",
+          "item_name": "Dürüm Kumru",
+          "price": 180.0,
+          "original_price": 180.0,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/emrah-donmez-pide-kebap-doner-osmangazi-altinova-mah-osmangazi-bursa-2/",
+          "city": "bursa",
+          "score": 1.09
+        },
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Pizza Bulls, (Kükürtlü Mah.)",
+          "item_name": "Acılı Tavuk (200 g)",
+          "price": 179.9,
+          "original_price": 179.9,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/pizza-bulls-kukurtlu-mah-osmangazi-bursa/",
+          "city": "bursa",
+          "score": 1.09
+        },
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Pizza Bulls, (Kükürtlü Mah.)",
+          "item_name": "Ispanaklı Tavuk (8 Adet)",
+          "price": 179.9,
+          "original_price": 179.9,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/pizza-bulls-kukurtlu-mah-osmangazi-bursa/",
+          "city": "bursa",
+          "score": 1.09
+        },
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Meşhur Adıyaman Çiğ Köftecisi Ömer Aybak, Yıldırım (Yıldırım Mah.)",
+          "item_name": "Çiğ Köfte (200 g)",
+          "price": 219.0,
+          "original_price": 219.0,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/meshur-adiyaman-cig-koftecisi-omer-aybak-yildirim-yildirim-mah-yildirim-bursa/",
+          "city": "bursa",
+          "score": 1.09
+        },
+        {
+          "platform": "trendyol",
+          "restaurant_name": "Mersin Yaprak Tantuni (Huzur)",
+          "item_name": "Çifte Haz Et Menü",
+          "price": 80.0,
+          "original_price": 350.0,
+          "discount_rate": 77.14,
+          "product_url": "https://tgoyemek.com/restoranlar/8663",
+          "city": "bursa",
+          "score": 1.05
+        },
+        {
+          "platform": "trendyol",
+          "restaurant_name": "Etkolik (Ayazağa)",
+          "item_name": "Fit Tavuk Şiş",
+          "price": 90.0,
+          "original_price": 250.0,
+          "discount_rate": 64.0,
+          "product_url": "https://tgoyemek.com/restoranlar/13373",
+          "city": "bursa",
+          "score": 1.05
+        },
+        {
+          "platform": "trendyol",
+          "restaurant_name": "Etkolik (Ayazağa)",
+          "item_name": "230 gr. tavuk göğsü, buharda mevsim sebzeleri ile / Fit Grilled Chicken",
+          "price": 90.0,
+          "original_price": 200.0,
+          "discount_rate": 55.0,
+          "product_url": "https://tgoyemek.com/restoranlar/13373",
+          "city": "bursa",
+          "score": 1.05
+        }
+      ]
+    },
+    {
+      "title": "Pizza & Burger Önerileri",
+      "description": "Popüler fast food kategorilerinden seçilmiş ürünler.",
+      "items": [
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Emrah Dönmez Pide & Kebap & Döner, Osmangazi (Altınova Mah.)",
+          "item_name": "Çocuk Burger",
+          "price": 225.0,
+          "original_price": 225.0,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/emrah-donmez-pide-kebap-doner-osmangazi-altinova-mah-osmangazi-bursa-2/",
+          "city": "bursa",
+          "score": 0.99
+        },
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Emrah Dönmez Pide & Kebap & Döner, Osmangazi (Altınova Mah.)",
+          "item_name": "Klasik Burger",
+          "price": 315.0,
+          "original_price": 315.0,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/emrah-donmez-pide-kebap-doner-osmangazi-altinova-mah-osmangazi-bursa-2/",
+          "city": "bursa",
+          "score": 0.99
+        },
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Pizza Bulls, (Kükürtlü Mah.)",
+          "item_name": "Pizza Dallas (Küçük)",
+          "price": 319.9,
+          "original_price": 319.9,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/pizza-bulls-kukurtlu-mah-osmangazi-bursa/",
+          "city": "bursa",
+          "score": 0.99
+        },
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Pizza Bulls, (Kükürtlü Mah.)",
+          "item_name": "Pizza Anadolu (Küçük)",
+          "price": 339.9,
+          "original_price": 339.9,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/pizza-bulls-kukurtlu-mah-osmangazi-bursa/",
+          "city": "bursa",
+          "score": 0.99
+        },
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Köfteci Yusuf, Osmangazi (Sakarya Mah.)",
+          "item_name": "Çift Köfte Burger Menü",
+          "price": 340.0,
+          "original_price": 340.0,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/kofteci-yusuf-osmangazi-sakarya-mah-osmangazi-bursa/",
+          "city": "bursa",
+          "score": 0.98
+        },
+        {
+          "platform": "trendyol",
+          "restaurant_name": "Carl's Jr (Maslak)",
+          "item_name": "Kids Chicken Burger",
+          "price": 260.0,
+          "original_price": 325.0,
+          "discount_rate": 20.0,
+          "product_url": "https://tgoyemek.com/restoranlar/5001",
+          "city": "bursa",
+          "score": 0.9
+        },
+        {
+          "platform": "trendyol",
+          "restaurant_name": "Carl's Jr (Maslak)",
+          "item_name": "Famous Star with Cheese Burger",
+          "price": 330.0,
+          "original_price": 395.0,
+          "discount_rate": 16.46,
+          "product_url": "https://tgoyemek.com/restoranlar/5001",
+          "city": "bursa",
+          "score": 0.89
+        },
+        {
+          "platform": "trendyol",
+          "restaurant_name": "Suadiye Marmaris (Yeniköy)",
+          "item_name": "Tavuk Cheeseburger",
+          "price": 350.0,
+          "original_price": 350.0,
+          "discount_rate": null,
+          "product_url": "https://tgoyemek.com/restoranlar/6082",
+          "city": "bursa",
+          "score": 0.85
+        }
+      ]
+    },
+    {
+      "title": "Tatlı Kaçamağı",
+      "description": "Tatlı, pasta, waffle ve benzeri seçenekler.",
+      "items": [
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Emrah Dönmez Pide & Kebap & Döner, Osmangazi (Altınova Mah.)",
+          "item_name": "Kazandibi",
+          "price": 135.0,
+          "original_price": 135.0,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/emrah-donmez-pide-kebap-doner-osmangazi-altinova-mah-osmangazi-bursa-2/",
+          "city": "bursa",
+          "score": 0.99
+        },
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Emrah Dönmez Pide & Kebap & Döner, Osmangazi (Altınova Mah.)",
+          "item_name": "Sütlaç",
+          "price": 135.0,
+          "original_price": 135.0,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/emrah-donmez-pide-kebap-doner-osmangazi-altinova-mah-osmangazi-bursa-2/",
+          "city": "bursa",
+          "score": 0.99
+        },
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Öz Urfa Altıngül Kebap & Pide, Osmangazi (Ulu Mah.)",
+          "item_name": "Algida Maraş Usulü Cup Dondurma (100 ml)",
+          "price": 90.0,
+          "original_price": 90.0,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/oz-urfa-altingul-kebap-pide-osmangazi-ulu-mah-osmangazi-bursa-2/",
+          "city": "bursa",
+          "score": 0.98
+        },
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Öz Urfa Altıngül Kebap & Pide, Osmangazi (Ulu Mah.)",
+          "item_name": "Cevizli Baklava (4 Dilim)",
+          "price": 150.0,
+          "original_price": 150.0,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/oz-urfa-altingul-kebap-pide-osmangazi-ulu-mah-osmangazi-bursa-2/",
+          "city": "bursa",
+          "score": 0.98
+        },
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Tavuk Dünyası, Osmangazi (Aktarhüssam Mah.)  ",
+          "item_name": "Fındıklı Fırın Sütlaç",
+          "price": 175.0,
+          "original_price": 175.0,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/tavuk-dunyasi-osmangazi-aktarhussam-mah-osmangazi-bursa/",
+          "city": "bursa",
+          "score": 0.98
+        },
+        {
+          "platform": "trendyol",
+          "restaurant_name": "Aş'kım Waffle & Kumpir (Ayazağa)",
+          "item_name": "Bardak Waffle",
+          "price": 99.0,
+          "original_price": 484.99,
+          "discount_rate": 79.59,
+          "product_url": "https://tgoyemek.com/restoranlar/1833",
+          "city": "bursa",
+          "score": 0.95
+        },
+        {
+          "platform": "trendyol",
+          "restaurant_name": "Aş'kım Waffle & Kumpir (Ayazağa)",
+          "item_name": "Bardak Waffle",
+          "price": 99.0,
+          "original_price": 400.0,
+          "discount_rate": 75.25,
+          "product_url": "https://tgoyemek.com/restoranlar/1833",
+          "city": "bursa",
+          "score": 0.95
+        },
+        {
+          "platform": "trendyol",
+          "restaurant_name": "Opera Pastanesi (Fulya)",
+          "item_name": "Frambuazlı Çikolatalı Pasta (4 Kişilik)",
+          "price": 140.0,
+          "original_price": 235.0,
+          "discount_rate": 40.43,
+          "product_url": "https://tgoyemek.com/restoranlar/2048",
+          "city": "bursa",
+          "score": 0.95
+        }
+      ]
+    },
+    {
+      "title": "İndirimli Fırsatlar",
+      "description": "İndirim oranı ve fiyat dengesi iyi olan seçenekler.",
+      "items": [
+        {
+          "platform": "trendyol",
+          "restaurant_name": "Etkolik (Ayazağa)",
+          "item_name": "230 gr. tavuk göğsü, buharda mevsim sebzeleri ile / Fit Grilled Chicken",
+          "price": 90.0,
+          "original_price": 200.0,
+          "discount_rate": 55.0,
+          "product_url": "https://tgoyemek.com/restoranlar/13373",
+          "city": "bursa",
+          "score": 0.93
+        },
+        {
+          "platform": "trendyol",
+          "restaurant_name": "Etkolik (Ayazağa)",
+          "item_name": "Tavuk Pirzola / Chop Chicken",
+          "price": 90.0,
+          "original_price": 200.0,
+          "discount_rate": 55.0,
+          "product_url": "https://tgoyemek.com/restoranlar/13373",
+          "city": "bursa",
+          "score": 0.93
+        },
+        {
+          "platform": "trendyol",
+          "restaurant_name": "Opera Pastanesi (Fulya)",
+          "item_name": "Frambuazlı Çikolatalı Pasta (4 Kişilik)",
+          "price": 140.0,
+          "original_price": 235.0,
+          "discount_rate": 40.43,
+          "product_url": "https://tgoyemek.com/restoranlar/2048",
+          "city": "bursa",
+          "score": 0.84
+        },
+        {
+          "platform": "trendyol",
+          "restaurant_name": "Aş'kım Waffle & Kumpir (Ayazağa)",
+          "item_name": "Sade Mag",
+          "price": 240.0,
+          "original_price": 400.0,
+          "discount_rate": 40.0,
+          "product_url": "https://tgoyemek.com/restoranlar/1833",
+          "city": "bursa",
+          "score": 0.84
+        },
+        {
+          "platform": "trendyol",
+          "restaurant_name": "Mersin Yaprak Tantuni (Huzur)",
+          "item_name": "Çifte Haz Et Menü",
+          "price": 80.0,
+          "original_price": 350.0,
+          "discount_rate": 77.14,
+          "product_url": "https://tgoyemek.com/restoranlar/8663",
+          "city": "bursa",
+          "score": 0.8
+        },
+        {
+          "platform": "yemeksepeti",
+          "restaurant_name": "Big Bubble Tea",
+          "item_name": "Dragon Lime",
+          "price": 203.92,
+          "original_price": 239.9,
+          "discount_rate": 15.0,
+          "product_url": "https://www.yemeksepeti.com/restaurant/hzig/big-bubble-tea-hzig",
+          "city": "bursa",
+          "score": 0.63
+        },
+        {
+          "platform": "yemeksepeti",
+          "restaurant_name": "Big Bubble Tea",
+          "item_name": "Fresh Watermelon",
+          "price": 203.92,
+          "original_price": 239.9,
+          "discount_rate": 15.0,
+          "product_url": "https://www.yemeksepeti.com/restaurant/hzig/big-bubble-tea-hzig",
+          "city": "bursa",
+          "score": 0.63
+        }
+      ]
+    },
+    {
+      "title": "Hafif ve Sağlıklı Seçenekler",
+      "description": "Daha hafif, fit veya sağlıklı sayılabilecek ürünler.",
+      "items": [
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Emrah Dönmez Pide & Kebap & Döner, Osmangazi (Altınova Mah.)",
+          "item_name": "Çoban Salata",
+          "price": 135.0,
+          "original_price": 135.0,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/emrah-donmez-pide-kebap-doner-osmangazi-altinova-mah-osmangazi-bursa-2/",
+          "city": "bursa",
+          "score": 1.14
+        },
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Emrah Dönmez Pide & Kebap & Döner, Osmangazi (Altınova Mah.)",
+          "item_name": "Mevsim Salata",
+          "price": 135.0,
+          "original_price": 135.0,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/emrah-donmez-pide-kebap-doner-osmangazi-altinova-mah-osmangazi-bursa-2/",
+          "city": "bursa",
+          "score": 1.14
+        },
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Öz Urfa Altıngül Kebap & Pide, Osmangazi (Ulu Mah.)",
+          "item_name": "Çoban Salata",
+          "price": 130.0,
+          "original_price": 130.0,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/oz-urfa-altingul-kebap-pide-osmangazi-ulu-mah-osmangazi-bursa-2/",
+          "city": "bursa",
+          "score": 1.14
+        },
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Komagene Etsiz Çiğ Köfte, Osmangazi (Soğanlı Mah.)",
+          "item_name": "Amerikan Salatası (150 g)",
+          "price": 125.0,
+          "original_price": 125.0,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/komagene-etsiz-cig-kofte-osmangazi-soganli-mah-osmangazi-bursa-2/",
+          "city": "bursa",
+          "score": 1.13
+        },
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Komagene Etsiz Çiğ Köfte, Osmangazi (Soğanlı Mah.)",
+          "item_name": "Doritos Taco Parti (175 g)",
+          "price": 90.0,
+          "original_price": 90.0,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/komagene-etsiz-cig-kofte-osmangazi-soganli-mah-osmangazi-bursa-2/",
+          "city": "bursa",
+          "score": 1.13
+        },
+        {
+          "platform": "trendyol",
+          "restaurant_name": "Aş'kım Waffle & Kumpir (Ayazağa)",
+          "item_name": "Kruvasan Bowl",
+          "price": 99.0,
+          "original_price": 474.99,
+          "discount_rate": 79.16,
+          "product_url": "https://tgoyemek.com/restoranlar/1833",
+          "city": "bursa",
+          "score": 1.1
+        },
+        {
+          "platform": "trendyol",
+          "restaurant_name": "Aş'kım Waffle & Kumpir (Ayazağa)",
+          "item_name": "Kruvasan Bowl",
+          "price": 99.0,
+          "original_price": 400.0,
+          "discount_rate": 75.25,
+          "product_url": "https://tgoyemek.com/restoranlar/1833",
+          "city": "bursa",
+          "score": 1.1
+        },
+        {
+          "platform": "trendyol",
+          "restaurant_name": "Etkolik (Ayazağa)",
+          "item_name": "Mevsim Salata / Seasonal Salad",
+          "price": 95.0,
+          "original_price": 210.95,
+          "discount_rate": 54.97,
+          "product_url": "https://tgoyemek.com/restoranlar/13373",
+          "city": "bursa",
+          "score": 1.1
+        }
+      ]
+    },
+    {
+      "title": "Bugünün Karışık Önerileri",
+      "description": "Farklı platform ve restoranlardan karışık ana yemek önerileri.",
+      "items": [
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Emrah Dönmez Pide & Kebap & Döner, Osmangazi (Altınova Mah.)",
+          "item_name": "Tavuk Döner Dürüm",
+          "price": 180.0,
+          "original_price": 180.0,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/emrah-donmez-pide-kebap-doner-osmangazi-altinova-mah-osmangazi-bursa-2/",
+          "city": "bursa",
+          "score": 0.49
+        },
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Emrah Dönmez Pide & Kebap & Döner, Osmangazi (Altınova Mah.)",
+          "item_name": "Çocuk Burger",
+          "price": 225.0,
+          "original_price": 225.0,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/emrah-donmez-pide-kebap-doner-osmangazi-altinova-mah-osmangazi-bursa-2/",
+          "city": "bursa",
+          "score": 0.49
+        },
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Pizza Bulls, (Kükürtlü Mah.)",
+          "item_name": "Tavuk Butları (4 Adet)",
+          "price": 224.9,
+          "original_price": 224.9,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/pizza-bulls-kukurtlu-mah-osmangazi-bursa/",
+          "city": "bursa",
+          "score": 0.49
+        },
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Pizza Bulls, (Kükürtlü Mah.)",
+          "item_name": "Pizza Houston (Küçük)",
+          "price": 319.9,
+          "original_price": 319.9,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/pizza-bulls-kukurtlu-mah-osmangazi-bursa/",
+          "city": "bursa",
+          "score": 0.49
+        },
+        {
+          "platform": "getir_yemek",
+          "restaurant_name": "Öz Urfa Altıngül Kebap & Pide, Osmangazi (Ulu Mah.)",
+          "item_name": "Tavuk Şiş Dürüm (65 g)",
+          "price": 250.0,
+          "original_price": 250.0,
+          "discount_rate": null,
+          "product_url": "https://getir.com/yemek/restoran/oz-urfa-altingul-kebap-pide-osmangazi-ulu-mah-osmangazi-bursa-2/",
+          "city": "bursa",
+          "score": 0.48
+        },
+        {
+          "platform": "trendyol",
+          "restaurant_name": "Etkolik (Ayazağa)",
+          "item_name": "Nazik Tavuk Şiş",
+          "price": 95.0,
+          "original_price": 200.0,
+          "discount_rate": 52.5,
+          "product_url": "https://tgoyemek.com/restoranlar/13373",
+          "city": "bursa",
+          "score": 0.45
+        },
+        {
+          "platform": "trendyol",
+          "restaurant_name": "Etkolik (Ayazağa)",
+          "item_name": "Karışık Pideli Köfte",
+          "price": 95.0,
+          "original_price": 250.0,
+          "discount_rate": 62.0,
+          "product_url": "https://tgoyemek.com/restoranlar/13373",
+          "city": "bursa",
+          "score": 0.45
+        },
+        {
+          "platform": "trendyol",
+          "restaurant_name": "Sadıkoğlu Döner Ve Taş Fırın (Seyrantepe)",
+          "item_name": "Dönerli-Kaşarlı Pide",
+          "price": 340.0,
+          "original_price": 980.0,
+          "discount_rate": 65.31,
+          "product_url": "https://tgoyemek.com/restoranlar/101481",
+          "city": "bursa",
+          "score": 0.45
+        }
+      ]
+    }
+  ]
+}
