@@ -36,6 +36,31 @@ HEALTHY_WORDS = [
     "veggie",
 ]
 
+HEALTHY_EXCLUDE_WORDS = [
+    "doritos",
+    "cips",
+    "chips",
+    "parti",
+    "nachos",
+    "patates kızartması",
+    "patates kizartmasi",
+    "kızartma",
+    "kizartma",
+    "çikolata",
+    "cikolata",
+    "dondurma",
+    "baklava",
+    "tatlı",
+    "tatli",
+    "profiterol",
+    "mayonez",
+    "sos",
+    "amerikan salatası",
+    "amerikan salatasi",
+    "rus salatası",
+    "rus salatasi",
+]
+
 BAD_HOMEPAGE_WORDS = [
     "sos",
     "ketçap",
@@ -348,6 +373,10 @@ def generate_homepage_recommendations(limit=8):
     # 5. Hafif / sağlıklı
     healthy_df = df[
         df.apply(lambda row: has_any(row.get("item_text", ""), HEALTHY_WORDS), axis=1)
+    ].copy()
+
+    healthy_df = healthy_df[
+        ~healthy_df.apply(lambda row: has_any(row.get("item_text", ""), HEALTHY_EXCLUDE_WORDS), axis=1)
     ].copy()
 
     healthy_df["homepage_score"] = healthy_df.apply(score_healthy, axis=1)
