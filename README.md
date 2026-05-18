@@ -163,8 +163,7 @@ Sık kullandığı platformlar
 Ortalama harcama aralığı
 Beğendiği / beğenmediği ürünler
 Sipariş verdiği saat aralıkları
-
----
+```
 
 ## Proje Yapısı
 
