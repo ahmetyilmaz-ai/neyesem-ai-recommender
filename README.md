@@ -147,6 +147,25 @@ Böylece kullanıcı daha hiçbir şey yapmadan mantıklı bir ana sayfa görür
 
 ---
 
+
+## Kullanıcı Geçmişi Oluşunca Ne Olur?
+
+Şu an sistem kullanıcı geçmişi olmadan çalışır. Buna **cold-start recommendation** diyoruz.
+
+Kullanıcı sipariş vermeye başladığında sistem daha akıllı hale gelir. Çünkü artık sadece genel ürün verisine değil, kullanıcının davranışına da bakabilir.
+
+Kullanıcı geçmişinden şu sinyaller çıkarılabilir:
+
+```txt
+En çok sipariş verdiği kategoriler
+Tekrar tercih ettiği restoranlar
+Sık kullandığı platformlar
+Ortalama harcama aralığı
+Beğendiği / beğenmediği ürünler
+Sipariş verdiği saat aralıkları
+
+---
+
 ## Proje Yapısı
 
 ```txt
@@ -391,23 +410,6 @@ Request body:
   ]
 }
 ```
-
-## Kullanıcı Geçmişi Oluşunca Ne Olur?
-
-Şu an sistem kullanıcı geçmişi olmadan çalışır. Buna **cold-start recommendation** diyoruz.
-
-Kullanıcı sipariş vermeye başladığında sistem daha akıllı hale gelir. Çünkü artık sadece genel ürün verisine değil, kullanıcının davranışına da bakabilir.
-
-Kullanıcı geçmişinden şu sinyaller çıkarılabilir:
-
-```txt
-En çok sipariş verdiği kategoriler
-Tekrar tercih ettiği restoranlar
-Sık kullandığı platformlar
-Ortalama harcama aralığı
-Beğendiği / beğenmediği ürünler
-Sipariş verdiği saat aralıkları
-
 ---
 
 ## Flutter Entegrasyonu
