@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from recommender import (
+from .recommender import (
     load_items,
     normalize_text,
     CATEGORY_KEYWORDS,
@@ -438,3 +438,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
