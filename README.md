@@ -4,28 +4,31 @@ Bu repo, **NeYesem projesinin AI öneri motorudur**.
 
 Görevi nettir:
 
-> Kullanıcının ne yemek istediğini anlamak, eldeki gerçek ürün verileriyle eşleştirmek ve mantıklı yemek önerileri üretmek.
+> Gerçek yemek verisini alır, anlamsal olarak işler, kullanıcı isteğine ve bağlamına göre mantıklı yemek önerileri üretir.
 
-Bu sistem ürün uydurmaz. Rastgele öneri basmaz. Kullanıcının isteğini, ürün adlarını, kategorileri, fiyatları ve indirimleri dikkate alır; elindeki gerçek veri üzerinden karar verir.
+Bu sistem ürün uydurmaz. Rastgele öneri basmaz. Elindeki gerçek ürün verisini kullanır. Kullanıcının yazdığı metni, fiyatı, indirimi, kategoriyi, saat bilgisini, şehir bilgisini ve kullanıcı profilini birlikte değerlendirir.
 
 ---
 
 ## Projenin Rolü
 
-NeYesem projesi üç ana parçadan oluşur:
+NeYesem mimarisi üç ana parçadan oluşur:
 
 ```txt
 Scraper / Data Pipeline
 → Yemek platformlarından ürün verilerini toplar
-→ all_items.json üretir
+→ data/all_items.json üretir
 
 AI Recommender
 → all_items.json dosyasını okur
+→ ürünleri semantic embedding'e çevirir
+→ FAISS index oluşturur
 → kullanıcıya öneri üretir
-→ API olarak frontend'e servis eder
+→ FastAPI üzerinden servis eder
 
-Frontend / Mobil Uygulama
+Frontend / Backend
 → AI API'den gelen önerileri kullanıcıya gösterir
+→ DB/backend uyumlu endpointleri kullanabilir
 ```
 
 Bu repo ikinci parçadır:
@@ -34,19 +37,19 @@ Bu repo ikinci parçadır:
 NeYesem AI Recommender
 ```
 
-Yani bu repo yemek verisini toplamaz. Toplanmış veriyi akıllıca kullanır.
+Yani bu repo veri toplamaz. Toplanmış veriyi akıllıca işler.
 
 ---
 
-## Sistem Ne Yapar?
+## Sistem Şu An Ne Yapıyor?
 
-Bu sistem iki farklı öneri tipi üretir.
+Sistem iki ana öneri tipi üretir.
 
 ### 1. Ana Sayfa Önerileri
 
-Kullanıcı uygulamayı açtığında daha hiçbir şey yazmamış olabilir. Bu durumda sistem boş durmaz.
+Kullanıcı uygulamayı açtığında daha hiçbir şey yazmamış olabilir. Sistem yine boş durmaz.
 
-Ana sayfa için hazır öneri bölümleri üretir:
+Ana sayfa için cold-start öneri bölümleri üretir:
 
 ```txt
 Uygun Fiyatlı Doyurucular
@@ -57,27 +60,32 @@ Hafif ve Sağlıklı Seçenekler
 Bugünün Karışık Önerileri
 ```
 
-Bu öneriler şu endpoint ile gelir:
+Endpoint:
 
 ```http
 GET /homepage?limit=8
 ```
 
-### 2. Kullanıcı İsteğine Göre AI Önerisi
+Bu endpoint Flutter ana sayfasında kullanılabilir.
 
-Kullanıcı şuna benzer bir şey yazabilir:
+---
+
+### 2. Kullanıcı İsteğine Göre Semantic AI Önerisi
+
+Kullanıcı serbest metin yazabilir:
 
 ```txt
 pizza öner
 çok açım ucuz ve doyurucu bir şey öner
+spordan çıktım yüksek proteinli ucuz bir şey öner
+hasta gibiyim sıcak çorba tarzı bir şey öner
 tatlı bir şey istiyorum ama pahalı olmasın
-sağlıklı hafif bir şey öner
-burger öner
+hafif sağlıklı bir şey olsun
 ```
 
-Sistem bu metni analiz eder, ilgili ürünleri bulur ve gerçek veri üzerinden öneri listesi üretir.
+Sistem bu metni kelime kelime basit arama gibi değil, **anlamsal olarak** işler.
 
-Bu öneriler şu endpoint ile gelir:
+Endpoint:
 
 ```http
 POST /recommend
@@ -85,90 +93,253 @@ POST /recommend
 
 ---
 
-## Kullanılan AI / ML Mantığı
+## Kullanılan AI Mimarisi
 
-Bu projede öneri sistemi **content-based recommendation** mantığıyla çalışır.
+Bu repo artık basit TF-IDF arama motoru değildir.
 
-Temel akış:
-
-```txt
-1. all_items.json okunur
-2. Ürün adları, restoran adları ve platform bilgileri temizlenir
-3. Kullanıcının yazdığı metin normalize edilir
-4. Ürünler TF-IDF ile vektörleştirilir
-5. Kullanıcı isteği de aynı vektör uzayına taşınır
-6. Cosine similarity ile benzer ürünler bulunur
-7. Fiyat, indirim, kategori ve tercih skorları eklenir
-8. En yüksek skorlu ürünler öneri olarak döndürülür
-```
-
-Kullanılan ana teknikler:
+Güncel mimari:
 
 ```txt
-TF-IDF
-Cosine Similarity
-Content-Based Recommendation
-Cold-Start Recommendation
-Rule-Based Ranking
-Data Cleaning
-Category Filtering
+Hugging Face SentenceTransformer
++ Dense Embeddings
++ FAISS Vector Search
++ Business Rule Scoring
++ Context-Aware Ranking
++ User Profile Filtering
 ```
 
-Sistem özellikle başlangıç aşaması için uygundur. Çünkü kullanıcı geçmişi olmadan da öneri üretebilir.
+Kullanılan model:
+
+```txt
+sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+```
+
+Bu model ürün metinlerini ve kullanıcı sorgusunu aynı anlamsal vektör uzayına taşır. Böylece sadece birebir kelime eşleşmesi değil, anlam yakınlığı üzerinden öneri yapılır.
+
+Örnek:
+
+```txt
+Kullanıcı: spordan çıktım proteinli bir şey öner
+Sistem: tavuk, proteinli pilav, grilled chicken, chicken burger gibi ürünleri öne çıkarır
+```
 
 ---
 
-## Cold-Start Recommendation Mantığı
+## Offline / Online Mimari
 
-Yeni kullanıcı geldiğinde sistemin elinde şu bilgiler yoktur:
+Sistemin en önemli mimari ayrımı budur.
 
-```txt
-Daha önce ne sipariş etti?
-Neye tıkladı?
-Hangi restoranları seviyor?
-Hangi fiyat aralığını tercih ediyor?
-```
+### Offline Build Aşaması
 
-Bu durumda sistem kullanıcı geçmişine güvenemez. O yüzden ana sayfa önerileri şu sinyallerle oluşturulur:
+Bu aşama veri güncellendiğinde çalışır.
 
 ```txt
-Ürün kategorisi
-Fiyat
-İndirim oranı
-Restoran adı
-Platform
-Ürün adı
-Ana yemek olup olmaması
-Yan ürün / sos / içecek filtreleri
-Sağlıklı ürün filtreleri
+data/all_items.json okunur
+ürün metinleri temizlenir
+ürünlerden semantic text oluşturulur
+SentenceTransformer ile embedding çıkarılır
+FAISS index oluşturulur
+artifacts/ klasörüne kaydedilir
 ```
 
-Böylece kullanıcı daha hiçbir şey yapmadan mantıklı bir ana sayfa görür.
+Komut:
+
+```powershell
+python .\src\build_index.py
+```
+
+Üretilen dosyalar:
+
+```txt
+artifacts/faiss_index.bin
+artifacts/item_embeddings.npy
+artifacts/item_metadata.json
+artifacts/semantic_config.json
+```
+
+Bu işlem her kullanıcı isteğinde yapılmaz. Veri güncellenince yapılır.
 
 ---
 
+### Online Inference Aşaması
 
-## Kullanıcı Geçmişi Oluşunca Ne Olur?
+FastAPI çalışırken sistem hazır indexi RAM'e alır.
 
-Şu an sistem kullanıcı geçmişi olmadan çalışır. Buna **cold-start recommendation** diyoruz.
-
-Kullanıcı sipariş vermeye başladığında sistem daha akıllı hale gelir. Çünkü artık sadece genel ürün verisine değil, kullanıcının davranışına da bakabilir.
-
-Kullanıcı geçmişinden şu sinyaller çıkarılabilir:
+Kullanıcı istek attığında:
 
 ```txt
-En çok sipariş verdiği kategoriler
-Tekrar tercih ettiği restoranlar
-Sık kullandığı platformlar
-Ortalama harcama aralığı
-Beğendiği / beğenmediği ürünler
-Sipariş verdiği saat aralıkları
+kullanıcı sorgusu embedding'e çevrilir
+FAISS en yakın ürünleri bulur
+context ve user_profile kuralları uygulanır
+final score hesaplanır
+en iyi öneriler JSON olarak döner
 ```
+
+Yani API isteği sırasında tüm ürünler baştan vektörleştirilmez. Sistem hazır FAISS index üzerinden çalışır.
+
+---
+
+## Skorlama Mantığı
+
+Sistem tek bir şeye bakmaz. Final skor birkaç sinyalden oluşur.
+
+```txt
+semantic_score
++ context_score
++ price_score
++ discount_score
++ category_score
++ user_profile_score
+```
+
+### Semantic Score
+
+Kullanıcı sorgusu ile ürün arasındaki anlamsal yakınlıktır.
+
+Örnek:
+
+```txt
+"yüksek proteinli ucuz bir şey"
+→ "Proteini Yüksek Tavuklu Pilav"
+→ yüksek semantic score
+```
+
+### Context Score
+
+Kullanıcının bağlamı dikkate alınır:
+
+```txt
+saat
+gün tipi
+şehir
+```
+
+Örnek:
+
+```txt
+Sabah saatlerinde ağır kebap/burger ürünleri geriye düşebilir.
+Akşam saatlerinde doyurucu ana yemekler öne çıkabilir.
+```
+
+### User Profile Score
+
+Kullanıcı profili dikkate alınır:
+
+```txt
+diyet tercihi
+alerjenler
+beğenilmeyen ürünler
+tercih edilen kategoriler
+maksimum bütçe
+```
+
+Örnek:
+
+```txt
+Laktoz alerjisi varsa sütlü ürünler elenir.
+Kullanıcı tavuk seviyorsa tavuk ürünleri skor kazanır.
+Max bütçe 350 TL ise aşırı pahalı ürünler geriye düşer.
+```
+
+---
+
+## Request Formatı
+
+`POST /recommend` endpointi şu formatı destekler:
+
+```json
+{
+  "query": "spordan çıktım yüksek proteinli ucuz bir şey öner",
+  "limit": 5,
+  "context": {
+    "hour": 19,
+    "day_type": "weekday",
+    "city": "bursa"
+  },
+  "user_profile": {
+    "diet": "Standart",
+    "allergies": [],
+    "disliked_items": [],
+    "preferred_categories": ["tavuk"],
+    "max_budget": 350
+  }
+}
+```
+
+---
+
+## Örnek Response
+
+```json
+{
+  "engine": "sentence_transformer_faiss",
+  "intent": {
+    "raw_query": "spordan çıktım yüksek proteinli ucuz bir şey öner",
+    "normalized_query": "spordan ciktim yuksek proteinli ucuz bir sey oner",
+    "categories": [],
+    "budget_max": 250,
+    "preference": "protein"
+  },
+  "context": {
+    "hour": 19,
+    "day_type": "weekday",
+    "city": "bursa"
+  },
+  "count": 5,
+  "recommendations": [
+    {
+      "platform": "trendyol",
+      "restaurant_name": "Etkolik",
+      "item_name": "Fit Grilled Chicken",
+      "category": "Tavuk",
+      "price": 90.0,
+      "original_price": 518.9,
+      "discount_rate": 82.66,
+      "score": 0.4953,
+      "semantic_score": 0.4744,
+      "context_score": 0.544,
+      "reason": "protein odaklı tercihle uyumlu, 90.00 TL, %82.7 indirim, semantik skor 0.47, bağlam skoru 0.54."
+    }
+  ]
+}
+```
+
+---
+
+## DB / Backend Uyumlu Endpointler
+
+Backend ve DB tarafı için ayrıca uyumlu çıktı formatı vardır.
+
+```http
+GET /db/homepage?limit=8
+POST /db/recommend
+```
+
+Bu endpointlerde öneriler şu yapıya ayrılır:
+
+```txt
+platform
+şehir
+restoran
+kategori
+ürün
+ai skoru
+```
+
+Yani PostgreSQL tarafındaki platform/restoran/kategori/ürün mantığına daha yakın JSON döner.
+
+---
 
 ## Proje Yapısı
 
 ```txt
 .
+├── artifacts/
+│   ├── faiss_index.bin
+│   ├── item_embeddings.npy
+│   ├── item_metadata.json
+│   └── semantic_config.json
+│
 ├── data/
 │   ├── all_items.json
 │   └── homepage_recommendations.json
@@ -176,8 +347,11 @@ Sipariş verdiği saat aralıkları
 ├── src/
 │   ├── __init__.py
 │   ├── api.py
+│   ├── build_index.py
+│   ├── db_output_adapter.py
+│   ├── homepage_recommender.py
 │   ├── recommender.py
-│   └── homepage_recommender.py
+│   └── semantic_recommender.py
 │
 ├── requirements.txt
 ├── README.md
@@ -192,69 +366,77 @@ Sipariş verdiği saat aralıkları
 
 Scraper/data pipeline tarafından üretilen ana veri dosyasıdır.
 
-Bu dosyada farklı platformlardan gelen ürünler ortak formatta bulunur.
-
-Örnek ürün:
-
-```json
-{
-  "platform": "getir_yemek",
-  "restaurant_name": "Pizza Bulls",
-  "item_name": "Orta Boy Sucuklu Pizza",
-  "price": 339.9,
-  "original_price": 339.9,
-  "discount_rate": null,
-  "product_url": "https://..."
-}
-```
-
-AI sistemi bütün önerilerini bu dosya üzerinden üretir.
+AI sistemi ürünleri buradan okur.
 
 ---
 
-### `src/recommender.py`
+### `src/build_index.py`
 
-Kullanıcının yazdığı metne göre öneri üretir.
+Offline index build scriptidir.
 
-Örnek:
-
-```powershell
-python .\src\recommender.py "pizza öner"
-```
-
-Bu dosya şunları yapar:
+Şunları yapar:
 
 ```txt
-Kullanıcı isteğini analiz eder
-Kategori çıkarır
-TF-IDF modeli kurar
-Cosine similarity hesaplar
-Fiyat ve kategori skorları ekler
-Önerileri JSON olarak döndürür
+all_items.json okur
+ürünleri temizler
+semantic text oluşturur
+SentenceTransformer ile embedding çıkarır
+FAISS index oluşturur
+artifacts/ klasörüne kaydeder
+```
+
+Komut:
+
+```powershell
+python .\src\build_index.py
+```
+
+---
+
+### `src/semantic_recommender.py`
+
+Ana semantic öneri motorudur.
+
+Şunları yapar:
+
+```txt
+FAISS index'i RAM'e yükler
+kullanıcı sorgusunu embedding'e çevirir
+FAISS ile en yakın ürünleri bulur
+context ve user_profile filtreleri uygular
+final score hesaplar
+öneri JSON'u döndürür
+```
+
+Terminalden test:
+
+```powershell
+python .\src\semantic_recommender.py "spordan çıktım yüksek proteinli ucuz bir şey öner"
 ```
 
 ---
 
 ### `src/homepage_recommender.py`
 
-Kullanıcı hiçbir şey yazmadan ana sayfa önerileri üretir.
+Kullanıcı hiçbir şey yazmadan ana sayfa cold-start önerileri üretir.
 
-Örnek:
-
-```powershell
-python .\src\homepage_recommender.py --limit 8
-```
-
-Dosyaya kaydetmek için:
+Komut:
 
 ```powershell
 python .\src\homepage_recommender.py --limit 8 --save
 ```
 
-Bu komut şunu üretir:
+---
+
+### `src/db_output_adapter.py`
+
+AI çıktısını backend/DB tarafına daha uygun formata çevirir.
+
+Kullanılan endpointler:
 
 ```txt
-data/homepage_recommendations.json
+/db/homepage
+/db/recommend
 ```
 
 ---
@@ -263,15 +445,17 @@ data/homepage_recommendations.json
 
 FastAPI servisidir.
 
-Frontend buraya istek atar.
+Frontend/backend buraya istek atar.
 
-Ana endpointler:
+Endpointler:
 
 ```txt
 GET  /
 GET  /health
 GET  /homepage
 POST /recommend
+GET  /db/homepage
+POST /db/recommend
 ```
 
 ---
@@ -284,7 +468,7 @@ Bağımlılıkları kur:
 python -m pip install -r .\requirements.txt
 ```
 
-`requirements.txt` içinde kullanılan ana paketler:
+`requirements.txt` içinde ana paketler:
 
 ```txt
 pandas
@@ -293,19 +477,31 @@ scikit-learn
 joblib
 fastapi
 uvicorn
+sentence-transformers
+faiss-cpu
 ```
+
+---
+
+## İlk Kurulumdan Sonra Index Build
+
+Model ve FAISS index için:
+
+```powershell
+python .\src\build_index.py
+```
+
+İlk çalıştırmada Hugging Face modeli indirilebilir. Sonraki çalıştırmalarda cache üzerinden kullanılır.
 
 ---
 
 ## API'yi Çalıştırma
 
-AI API'yi başlatmak için:
-
 ```powershell
 uvicorn src.api:app --reload
 ```
 
-API çalışınca şu adres açılır:
+API adresi:
 
 ```txt
 http://127.0.0.1:8000
@@ -319,9 +515,7 @@ http://127.0.0.1:8000/docs
 
 ---
 
-## API Endpointleri
-
-### Health Check
+## Health Check
 
 ```http
 GET /health
@@ -332,88 +526,16 @@ GET /health
 ```json
 {
   "status": "ok",
-  "service": "neyesem-ai-recommender"
+  "service": "neyesem-ai-recommender",
+  "engine": "sentence-transformer-faiss"
 }
 ```
 
 ---
 
-### Ana Sayfa Önerileri
+## Frontend Entegrasyonu
 
-```http
-GET /homepage?limit=8
-```
-
-Bu endpoint kullanıcı hiçbir şey yazmadan gösterilecek ana sayfa önerilerini döndürür.
-
-Örnek cevap yapısı:
-
-```json
-{
-  "type": "cold_start_homepage_recommendations",
-  "section_count": 6,
-  "sections": [
-    {
-      "title": "Uygun Fiyatlı Doyurucular",
-      "description": "Fiyatı görece uygun, ana yemek sayılabilecek doyurucu seçenekler.",
-      "items": []
-    }
-  ]
-}
-```
-
-Frontend ana sayfada bu section'ları kart kart gösterebilir.
-
----
-
-### Kullanıcı İsteğine Göre Öneri
-
-```http
-POST /recommend
-```
-
-Request body:
-
-```json
-{
-  "query": "pizza öner",
-  "limit": 10
-}
-```
-
-Örnek cevap:
-
-```json
-{
-  "intent": {
-    "raw_query": "pizza öner",
-    "normalized_query": "pizza oner",
-    "categories": ["pizza"],
-    "budget_max": null,
-    "preference": "balanced"
-  },
-  "count": 10,
-  "recommendations": [
-    {
-      "platform": "getir_yemek",
-      "restaurant_name": "Pizza Bulls",
-      "item_name": "Orta Boy Sucuklu Pizza",
-      "price": 339.9,
-      "original_price": 339.9,
-      "discount_rate": null,
-      "product_url": "https://...",
-      "score": 0.2496,
-      "ml_similarity": 0.2841,
-      "reason": "pizza isteğine uygun, 339.90 TL."
-    }
-  ]
-}
-```
----
-
-## Flutter Entegrasyonu
-
-Flutter tarafı lokal geliştirmede şu base URL'i kullanır:
+Flutter veya başka bir frontend lokal geliştirmede şu base URL'i kullanır:
 
 ```txt
 http://127.0.0.1:8000
@@ -421,13 +543,13 @@ http://127.0.0.1:8000
 
 Chrome üzerinde çalışırken bu adres doğrudur.
 
-Android emulator için base URL şu olur:
+Android emulator için:
 
 ```txt
 http://10.0.2.2:8000
 ```
 
-Gerçek telefonda çalıştırılacaksa bilgisayarın local IP adresi kullanılır ve API şu şekilde başlatılır:
+Gerçek telefonda test için API şöyle açılır:
 
 ```powershell
 uvicorn src.api:app --reload --host 0.0.0.0 --port 8000
@@ -437,238 +559,133 @@ uvicorn src.api:app --reload --host 0.0.0.0 --port 8000
 
 ## Frontend İçin Kullanım
 
-Ana sayfa için:
+Ana sayfa:
 
 ```http
 GET http://127.0.0.1:8000/homepage?limit=8
 ```
 
-Kullanıcı arama/istek kutusu için:
+Kullanıcı arama/istek kutusu:
 
 ```http
 POST http://127.0.0.1:8000/recommend
 ```
 
-Body:
+Backend/DB uyumlu çıktı:
 
-```json
-{
-  "query": "ucuz doyurucu bir şey öner",
-  "limit": 10
-}
+```http
+POST http://127.0.0.1:8000/db/recommend
 ```
-
-Frontend bu cevaptaki `recommendations` listesini kart olarak basar.
-
-Olay bu kadar.
 
 ---
 
-## Öneri Skoru Nasıl Hesaplanır?
+## Kullanıcı Geçmişi Oluşunca Ne Olur?
 
-Sistem tek bir şeye bakmaz. Birkaç sinyali beraber kullanır.
+Kullanıcı sipariş verdikçe sistem daha kişisel hale gelir.
 
-### Metin Benzerliği
+Toplanabilecek sinyaller:
 
-Kullanıcının isteği ile ürün metni arasındaki benzerlik hesaplanır.
+```txt
+en çok sipariş edilen kategoriler
+tekrar tercih edilen restoranlar
+ortalama harcama aralığı
+beğenilen / beğenilmeyen ürünler
+sipariş saatleri
+diyet ve alerjen bilgileri
+```
+
+Bu bilgiler `user_profile` alanı üzerinden öneri skoruna eklenir.
 
 Örnek:
 
 ```txt
-Kullanıcı: pizza öner
-Ürün: Orta Boy Sucuklu Pizza
-→ yüksek benzerlik
+Kullanıcı tavuk ürünlerini seviyorsa tavuk ürünleri skor kazanır.
+Laktoz alerjisi varsa sütlü ürünler elenir.
+Max bütçe varsa pahalı ürünler geriye düşer.
 ```
-
-### Kategori Uyumu
-
-Sistem bazı kategorileri tanır:
-
-```txt
-pizza
-burger
-döner
-pide
-tatlı
-tavuk
-içecek
-sağlıklı
-```
-
-Kullanıcı isteğinde kategori varsa ürünler buna göre filtrelenir.
-
-### Fiyat Skoru
-
-Ucuz, uygun fiyatlı veya bütçe odaklı isteklerde fiyat etkisi artar.
-
-Örnek:
-
-```txt
-çok açım ucuz bir şey öner
-```
-
-Bu durumda sistem düşük/orta fiyatlı ve doyurucu ürünleri öne çıkarır.
-
-### Doyuruculuk Skoru
-
-Doyurucu ürünlerde şu kelimeler dikkate alınır:
-
-```txt
-menü
-döner
-burger
-pizza
-pide
-lahmacun
-tavuk
-köfte
-dürüm
-tantuni
-kebap
-```
-
-### İndirim Skoru
-
-İndirim oranı varsa skora eklenir. Çok uç değerler kontrollü değerlendirilir.
 
 ---
 
 ## Veri Temizleme
 
-Öneri sistemi çöp veriyi ekrana basmamak için filtreleme yapar.
+Sistem çöp veriyi öneriye sokmamak için filtreleme yapar.
 
-Temizlenen/elenen örnekler:
-
-```txt
-Detaylar
-Sadece sayı olan ürün adları
-Sos
-Ketçap
-Mayonez
-Peçete
-Yan ürünler
-Anlamsız scrape metinleri
-```
-
-Ana sayfa önerilerinde ayrıca içecek ve yan ürünlerin yanlış kategoriye düşmesi engellenir.
-
-Örnek:
+Elenen örnekler:
 
 ```txt
-Pizza Bulls restoranındaki Fuse Tea, pizza önerisi sayılmaz.
-Profiterol, sağlıklı ürün sayılmaz.
-Doritos Taco Parti, sağlıklı ürün sayılmaz.
+sos
+ketçap
+mayonez
+peçete
+anlamsız scrape metinleri
+yan ürünler
+protein sorgusunda tatlı/içecek/sos ürünleri
+sağlıklı sorgusunda abur cubur ürünler
 ```
 
 Kurallar net. Ürün neyse o.
 
 ---
 
-## Komutlar
+## Test Komutları
 
-### Kullanıcı isteğine göre öneri üret
-
-```powershell
-python .\src\recommender.py "pizza öner"
-```
+Semantic recommender test:
 
 ```powershell
-python .\src\recommender.py "çok açım ucuz ve doyurucu bir şey öner"
+python .\src\semantic_recommender.py "spordan çıktım yüksek proteinli ucuz bir şey öner"
 ```
 
-```powershell
-python .\src\recommender.py "tatlı bir şey istiyorum ama pahalı olmasın"
-```
-
-### Ana sayfa önerisi üret
-
-```powershell
-python .\src\homepage_recommender.py --limit 8
-```
-
-### Ana sayfa önerisini dosyaya kaydet
+Ana sayfa önerisi üret:
 
 ```powershell
 python .\src\homepage_recommender.py --limit 8 --save
 ```
 
-### API'yi başlat
+API test:
 
 ```powershell
-uvicorn src.api:app --reload
+$body = @{
+  query = "spordan çıktım yüksek proteinli ucuz bir şey öner"
+  limit = 5
+  context = @{
+    hour = 19
+    day_type = "weekday"
+    city = "bursa"
+  }
+  user_profile = @{
+    diet = "Standart"
+    allergies = @()
+    disliked_items = @()
+    preferred_categories = @("tavuk")
+    max_budget = 350
+  }
+} | ConvertTo-Json -Depth 5
+
+Invoke-RestMethod `
+  -Uri "http://127.0.0.1:8000/recommend" `
+  -Method POST `
+  -ContentType "application/json; charset=utf-8" `
+  -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
 ```
 
 ---
 
-## Örnek Kullanıcı Senaryoları
-
-### Senaryo 1
-
-Kullanıcı:
-
-```txt
-pizza öner
-```
-
-Sistem:
-
-```txt
-Pizza kategorisini çıkarır
-Pizza ürünlerini filtreler
-TF-IDF benzerliği hesaplar
-Gerçek pizza ürünlerini listeler
-```
-
-### Senaryo 2
-
-Kullanıcı:
-
-```txt
-çok açım ucuz ve doyurucu bir şey öner
-```
-
-Sistem:
-
-```txt
-Preference = filling
-Budget = düşük/orta
-Doyurucu ana yemekleri öne çıkarır
-Fiyatı yüksek olanları geriye atar
-```
-
-### Senaryo 3
-
-Kullanıcı:
-
-```txt
-tatlı bir şey istiyorum ama pahalı olmasın
-```
-
-Sistem:
-
-```txt
-Tatlı kategorisini çıkarır
-Ucuz tatlıları öne çıkarır
-İndirim varsa skora ekler
-```
-
 ## Geliştirme Akışı
 
-Veri güncellendikten sonra `data/all_items.json` dosyası yenilenir.
-
-Sonra ana sayfa önerileri tekrar üretilebilir:
+Veri güncellendiğinde:
 
 ```powershell
+python .\src\build_index.py
 python .\src\homepage_recommender.py --limit 8 --save
 ```
 
-API tekrar çalıştırılır:
+Sonra API çalıştırılır:
 
 ```powershell
 uvicorn src.api:app --reload
 ```
 
-Frontend aynı endpointleri çağırmaya devam eder.
+Frontend/backend aynı endpointleri çağırmaya devam eder.
 
 ---
 
@@ -676,13 +693,12 @@ Frontend aynı endpointleri çağırmaya devam eder.
 
 Bu repo artık AI tarafında görevini yapar.
 
-Elindeki gerçek yemek verisini okur, temizler, anlamlandırır, skorlar ve frontend'in kullanabileceği öneri çıktısına çevirir.
-
-Kısaca:
-
 ```txt
 Veri gelir.
-AI karar verir.
+Embedding çıkarılır.
+FAISS index kurulur.
+Kullanıcı sorgusu anlamsal olarak aranır.
+Context ve profil kuralları uygulanır.
+AI öneri üretir.
 API servis eder.
-Frontend gösterir.
 ```
