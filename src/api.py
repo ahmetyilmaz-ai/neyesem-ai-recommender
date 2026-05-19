@@ -1,4 +1,4 @@
-﻿from typing import Optional
+from typing import Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,13 +6,14 @@ from pydantic import BaseModel, Field
 
 from .homepage_recommender import generate_homepage_recommendations
 from .semantic_recommender import semantic_recommend
+from .compare_engine import compare_items
 from .db_output_adapter import adapt_homepage_response, adapt_recommend_response
 
 
 app = FastAPI(
     title="NeYesem AI Recommender",
-    description="Semantic search, cold-start ve content-based yemek öneri API'si",
-    version="0.2.0",
+    description="Semantic search, comparison, cold-start and content-based food recommendation API",
+    version="0.3.0",
 )
 
 app.add_middleware(
@@ -48,13 +49,10 @@ class RecommendRequest(BaseModel):
 def model_to_dict(value):
     if value is None:
         return {}
-
     if hasattr(value, "model_dump"):
         return value.model_dump()
-
     if hasattr(value, "dict"):
         return value.dict()
-
     return dict(value)
 
 
@@ -69,8 +67,10 @@ def root():
             "health": "/health",
             "homepage": "/homepage?limit=8",
             "recommend": "/recommend",
+            "compare": "/compare",
             "db_homepage": "/db/homepage?limit=8",
             "db_recommend": "/db/recommend",
+            "db_compare": "/db/compare",
         },
     }
 
@@ -81,6 +81,12 @@ def health():
         "status": "ok",
         "service": "neyesem-ai-recommender",
         "engine": "sentence-transformer-faiss",
+        "features": [
+            "cold_start_homepage",
+            "semantic_recommendation",
+            "price_comparison",
+            "db_compatible_output",
+        ],
     }
 
 
@@ -92,6 +98,16 @@ def homepage(limit: int = 8):
 @app.post("/recommend")
 def recommend_items(request: RecommendRequest):
     return semantic_recommend(
+        query=request.query,
+        limit=request.limit,
+        context=model_to_dict(request.context),
+        user_profile=model_to_dict(request.user_profile),
+    )
+
+
+@app.post("/compare")
+def compare_recommendations(request: RecommendRequest):
+    return compare_items(
         query=request.query,
         limit=request.limit,
         context=model_to_dict(request.context),
@@ -114,3 +130,13 @@ def db_recommend_items(request: RecommendRequest):
         user_profile=model_to_dict(request.user_profile),
     )
     return adapt_recommend_response(response)
+
+
+@app.post("/db/compare")
+def db_compare_recommendations(request: RecommendRequest):
+    return compare_items(
+        query=request.query,
+        limit=request.limit,
+        context=model_to_dict(request.context),
+        user_profile=model_to_dict(request.user_profile),
+    )
