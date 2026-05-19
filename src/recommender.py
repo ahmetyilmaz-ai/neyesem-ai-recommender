@@ -1,386 +1,355 @@
-﻿import json
+import json
 import re
-import sys
 from pathlib import Path
+from typing import Any
 
+import numpy as np
 import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from sentence_transformers import SentenceTransformer
 
 
-DATA_PATH = Path("data/all_items.json")
+ROOT_DIR = Path(__file__).resolve().parent.parent
+ARTIFACTS_DIR = ROOT_DIR / "artifacts"
+METADATA_PATH = ARTIFACTS_DIR / "item_metadata.json"
+EMBEDDINGS_PATH = ARTIFACTS_DIR / "item_embeddings.npy"
+FAISS_INDEX_PATH = ARTIFACTS_DIR / "faiss_index.bin"
+CONFIG_PATH = ARTIFACTS_DIR / "semantic_config.json"
+DEFAULT_MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
-CATEGORY_KEYWORDS = {
-    "pizza": ["pizza"],
-    "burger": ["burger", "hamburger"],
-    "döner": ["döner", "doner"],
-    "pide": ["pide", "lahmacun"],
-    "tatlı": ["tatlı", "tatli", "waffle", "pasta", "baklava", "dondurma", "sütlaç", "sutlac", "kazandibi", "magnolia"],
-    "tavuk": ["tavuk", "chicken", "kanat", "şiş", "sis"],
-    "içecek": ["su", "kola", "ayran", "ice tea", "fanta", "sprite", "içecek", "icecek"],
-    "sağlıklı": ["salata", "fit", "bowl", "taco", "tacofit", "ızgara", "izgara"],
-}
-
-FILLING_WORDS = [
-    "menü", "menu", "döner", "doner", "burger", "pizza", "pide",
-    "lahmacun", "tavuk", "köfte", "kofte", "dürüm", "durum",
-    "tantuni", "kebap", "kebab", "taco"
+HEAVY_MORNING_WORDS = [
+    "burger", "hamburger", "kebap", "kebab", "adana", "urfa", "lahmacun",
+    "tantuni", "iskender", "döner", "doner", "pizza", "kanat", "pirzola",
 ]
 
-BAD_ITEM_WORDS = [
-    "detaylar", "sepet", "minimum", "teslimat", "kampanya",
-    "cookie", "çerez", "cerez", "şu anda", "su anda", "temsili",
-    "anasayfa", "restoran", "filtre", "sırala", "sirala"
+LACTOSE_WORDS = [
+    "süt", "sut", "milk", "peynir", "cheese", "yoğurt", "yogurt", "ayran",
+    "dondurma", "krema", "magnolia", "sütlaç", "sutlac", "kazandibi",
+    "profiterol", "cheesecake", "mozzarella", "parmesan",
 ]
 
-ADDON_WORDS = [
-    "ketçap", "ketcap", "mayonez", "sos", "acı sos", "aci sos",
-    "ranch", "barbekü", "barbeku", "cheddar sos", "kenar sos",
-    "ekstra", "peçete", "pecete"
+MEAT_WORDS = [
+    "et", "dana", "tavuk", "chicken", "köfte", "kofte", "döner", "doner",
+    "kebap", "kebab", "sucuk", "kanat", "tantuni", "burger",
 ]
 
 
-def normalize_text(value):
+class RecommenderNotReadyError(RuntimeError):
+    pass
+
+
+def normalize_text(value: Any) -> str:
     value = str(value or "").lower().strip()
-
-    replacements = {
-        "ı": "i",
-        "ğ": "g",
-        "ü": "u",
-        "ş": "s",
-        "ö": "o",
-        "ç": "c",
-    }
-
+    replacements = {"ı": "i", "ğ": "g", "ü": "u", "ş": "s", "ö": "o", "ç": "c"}
     for source, target in replacements.items():
         value = value.replace(source, target)
-
     value = re.sub(r"[^a-z0-9\s]", " ", value)
     value = re.sub(r"\s+", " ", value)
-
     return value.strip()
 
 
-def is_bad_item_name(name):
-    raw = str(name or "").strip()
-    normalized = normalize_text(raw)
-
-    if not raw:
-        return True
-
-    if len(raw) < 3:
-        return True
-
-    if normalized.isdigit():
-        return True
-
-    if any(normalize_text(word) in normalized for word in BAD_ITEM_WORDS):
-        return True
-
-    return False
+def safe_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except TypeError:
+        pass
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
-def is_addon_item(name):
-    normalized = normalize_text(name)
-    return any(normalize_text(word) in normalized for word in ADDON_WORDS)
+def clean_number(value: Any) -> float | None:
+    number = safe_float(value)
+    if number is None:
+        return None
+    return round(float(number), 2)
 
 
-def load_items():
-    with DATA_PATH.open("r", encoding="utf-8") as file:
-        items = json.load(file)
+def has_any(text: str, words: list[str]) -> bool:
+    normalized = normalize_text(text)
+    return any(normalize_text(word) in normalized for word in words)
 
-    df = pd.DataFrame(items)
 
-    for column in [
-        "platform",
-        "restaurant_name",
-        "restaurant_rating",
-        "item_name",
-        "price",
-        "original_price",
-        "discount_rate",
-        "product_url",
-        "city",
-    ]:
-        if column not in df.columns:
-            df[column] = None
-
-    df["price"] = pd.to_numeric(df["price"], errors="coerce")
-    df["original_price"] = pd.to_numeric(df["original_price"], errors="coerce")
-    df["discount_rate"] = pd.to_numeric(df["discount_rate"], errors="coerce")
-    df["restaurant_rating"] = pd.to_numeric(df["restaurant_rating"], errors="coerce")
-
-    df = df.dropna(subset=["price"]).copy()
-    df = df[~df["item_name"].apply(is_bad_item_name)].copy()
-    df = df[(df["price"] > 0) & (df["price"] <= 2500)].copy()
-
-    df["item_text"] = df["item_name"].fillna("").apply(normalize_text)
-    df["restaurant_text"] = df["restaurant_name"].fillna("").apply(normalize_text)
-    df["platform_text"] = df["platform"].fillna("").apply(normalize_text)
-
-    df["model_text"] = (
-        df["item_text"] + " " +
-        df["item_text"] + " " +
-        df["restaurant_text"] + " " +
-        df["platform_text"]
+def item_text(item: dict[str, Any]) -> str:
+    return " ".join(
+        [
+            str(item.get("item_name") or ""),
+            str(item.get("category") or ""),
+            str(item.get("restaurant_name") or ""),
+        ]
     )
 
-    return df.reset_index(drop=True)
 
-
-def infer_intent(user_text):
-    normalized = normalize_text(user_text)
-
-    categories = []
-
-    for category, keywords in CATEGORY_KEYWORDS.items():
-        if any(normalize_text(keyword) in normalized for keyword in keywords):
-            categories.append(category)
-
-    budget_max = None
-
+def infer_intent(query: str) -> dict[str, Any]:
+    normalized = normalize_text(query)
     numbers = re.findall(r"\d+", normalized)
+    budget_max = None
     if numbers:
         possible_budget = max(int(number) for number in numbers)
-        if 50 <= possible_budget <= 2000:
+        if 50 <= possible_budget <= 3000:
             budget_max = possible_budget
-
-    if budget_max is None and any(word in normalized for word in ["ucuz", "uygun", "butce", "butçe", "bütce", "bütçe", "pahali olmasin"]):
+    if budget_max is None and has_any(normalized, ["ucuz", "uygun", "butce", "bütçe", "pahali olmasin"]):
         budget_max = 250
 
-    if any(word in normalized for word in ["cok ac", "çok aç", "doyurucu", "acim", "açım"]):
+    if has_any(normalized, ["spor", "protein", "proteinli", "yuksek protein", "yüksek protein"]):
+        preference = "protein"
+    elif has_any(normalized, ["cok ac", "çok aç", "acim", "açım", "doyurucu", "buyuk", "büyük"]):
         preference = "filling"
-    elif any(word in normalized for word in ["ucuz", "uygun", "pahali olmasin", "pahalı olmasın"]):
+    elif has_any(normalized, ["ucuz", "uygun", "pahali olmasin", "pahalı olmasın"]):
         preference = "cheap"
-    elif any(word in normalized for word in ["saglikli", "sağlıklı", "hafif"]):
+    elif has_any(normalized, ["saglikli", "sağlıklı", "hafif", "fit"]):
         preference = "healthy"
-    elif any(word in normalized for word in ["tatli", "tatlı", "sweet"]):
+    elif has_any(normalized, ["tatli", "tatlı", "sweet"]):
         preference = "sweet"
-        if "tatlı" not in categories:
-            categories.append("tatlı")
     else:
         preference = "balanced"
 
     return {
-        "raw_query": user_text,
+        "raw_query": query,
         "normalized_query": normalized,
-        "categories": categories,
         "budget_max": budget_max,
         "preference": preference,
     }
 
 
-def item_matches_category(row, category):
-    item_text = row.get("item_text", "")
-    restaurant_text = row.get("restaurant_text", "")
+class RecommenderEngine:
+    def __init__(self, model: SentenceTransformer, items: list[dict[str, Any]], embeddings: np.ndarray, faiss_index: Any | None):
+        self.model = model
+        self.items = items
+        self.embeddings = embeddings.astype("float32")
+        self.faiss_index = faiss_index
 
-    keywords = CATEGORY_KEYWORDS.get(category, [category])
-    keywords = [normalize_text(keyword) for keyword in keywords]
+    def search(self, query: str, top_k: int = 50) -> list[tuple[dict[str, Any], float]]:
+        if not self.items:
+            return []
+        top_k = min(top_k, len(self.items))
+        query_vector = self.model.encode(
+            [query],
+            convert_to_numpy=True,
+            normalize_embeddings=True,
+        ).astype("float32")
 
-    if category in ["pizza", "burger", "döner", "pide", "tatlı", "tavuk", "içecek"]:
-        return any(keyword in item_text for keyword in keywords)
+        if self.faiss_index is not None:
+            scores, indices = self.faiss_index.search(query_vector, top_k)
+            results = []
+            for index, score in zip(indices[0], scores[0]):
+                if index < 0:
+                    continue
+                results.append((self.items[int(index)], float(score)))
+            return results
 
-    return any(keyword in item_text or keyword in restaurant_text for keyword in keywords)
-
-
-def filter_candidates(df, intent):
-    candidates = df.copy()
-
-    categories = intent.get("categories") or []
-    budget_max = intent.get("budget_max")
-    preference = intent.get("preference")
-
-    if categories:
-        mask = pd.Series(False, index=candidates.index)
-
-        for category in categories:
-            mask = mask | candidates.apply(lambda row: item_matches_category(row, category), axis=1)
-
-        candidates = candidates[mask].copy()
-
-    if categories and "içecek" not in categories:
-        candidates = candidates[~candidates["item_name"].apply(is_addon_item)].copy()
-
-    if preference == "filling":
-        candidates = candidates[~candidates["item_name"].apply(is_addon_item)].copy()
-
-        filling_mask = candidates["item_text"].apply(
-            lambda text: any(normalize_text(word) in text for word in FILLING_WORDS)
-        )
-
-        if filling_mask.sum() >= 5:
-            candidates = candidates[filling_mask].copy()
-
-    if budget_max:
-        candidates = candidates[candidates["price"] <= float(budget_max) * 1.25].copy()
-
-    return candidates.reset_index(drop=True)
+        scores = self.embeddings @ query_vector[0]
+        best_indices = np.argsort(scores)[::-1][:top_k]
+        return [(self.items[int(index)], float(scores[int(index)])) for index in best_indices]
 
 
-def build_query_text(intent):
-    parts = [intent.get("normalized_query", "")]
+def load_recommender() -> RecommenderEngine:
+    if not METADATA_PATH.exists() or not EMBEDDINGS_PATH.exists():
+        raise RecommenderNotReadyError("Semantic artifacts bulunamadı. Önce python .\\src\\build_index.py çalıştırılmalı.")
 
-    for category in intent.get("categories") or []:
-        parts.append(category)
-        parts.extend(CATEGORY_KEYWORDS.get(category, []))
+    config = {}
+    if CONFIG_PATH.exists():
+        with CONFIG_PATH.open("r", encoding="utf-8") as file:
+            config = json.load(file)
 
-    preference = intent.get("preference")
+    model_name = config.get("model_name", DEFAULT_MODEL_NAME)
+    model = SentenceTransformer(model_name)
 
-    if preference == "filling":
-        parts.extend(FILLING_WORDS)
-    elif preference == "healthy":
-        parts.extend(CATEGORY_KEYWORDS["sağlıklı"])
-    elif preference == "sweet":
-        parts.extend(CATEGORY_KEYWORDS["tatlı"])
+    with METADATA_PATH.open("r", encoding="utf-8") as file:
+        items = json.load(file)
 
-    return " ".join(parts)
+    embeddings = np.load(EMBEDDINGS_PATH).astype("float32")
+    faiss_index = None
 
+    if FAISS_INDEX_PATH.exists():
+        try:
+            import faiss
+            try:
+                faiss_index = faiss.read_index(str(FAISS_INDEX_PATH))
+            except Exception:
+                with FAISS_INDEX_PATH.open("rb") as file:
+                    index_bytes = np.frombuffer(file.read(), dtype="uint8")
+                faiss_index = faiss.deserialize_index(index_bytes)
+        except Exception:
+            faiss_index = None
 
-def calculate_business_score(row, intent):
-    score = 0.0
-
-    price = row.get("price")
-    discount = row.get("discount_rate")
-    rating = row.get("restaurant_rating")
-    preference = intent.get("preference")
-    budget_max = intent.get("budget_max")
-
-    if pd.notna(price):
-        if budget_max and price <= budget_max:
-            score += 0.20
-
-        if preference == "cheap":
-            score += max(0, 1 - min(price, 500) / 500) * 0.25
-        elif preference == "balanced":
-            score += max(0, 1 - min(price, 700) / 700) * 0.15
-        elif preference == "filling":
-            if 80 <= price <= 450:
-                score += 0.20
-            elif price < 80:
-                score -= 0.15
-
-    if pd.notna(discount):
-        capped_discount = min(float(discount), 40)
-        score += (capped_discount / 100) * 0.20
-
-    if pd.notna(rating):
-        score += min(float(rating), 5) / 5 * 0.10
-
-    if preference == "filling":
-        item_text = row.get("item_text", "")
-        if any(normalize_text(word) in item_text for word in FILLING_WORDS):
-            score += 0.20
-
-    return score
+    return RecommenderEngine(model=model, items=items, embeddings=embeddings, faiss_index=faiss_index)
 
 
-def build_reason(row, intent):
-    parts = []
+def should_drop_item(item: dict[str, Any], hour: int | None, allergies: list[str], diet: str | None) -> bool:
+    text = item_text(item)
+    normalized_diet = normalize_text(diet)
+    normalized_allergies = [normalize_text(allergy) for allergy in allergies or []]
 
-    categories = intent.get("categories") or []
-    preference = intent.get("preference")
+    if hour is not None and 6 <= int(hour) <= 11:
+        if has_any(text, HEAVY_MORNING_WORDS):
+            return True
 
-    if categories:
-        parts.append(f"{', '.join(categories)} isteğine uygun")
+    if "laktoz" in normalized_allergies or "lactose" in normalized_allergies:
+        if has_any(text, LACTOSE_WORDS):
+            return True
 
-    if preference == "filling":
-        parts.append("doyurucu seçenek")
-    elif preference == "cheap":
-        parts.append("fiyat odaklı seçildi")
-    elif preference == "healthy":
-        parts.append("daha hafif/sağlıklı seçenek")
-    elif preference == "sweet":
-        parts.append("tatlı isteğine uygun")
+    if normalized_diet in ["vegan", "vejetaryen", "vegetarian"]:
+        if has_any(text, MEAT_WORDS):
+            return True
 
-    if pd.notna(row.get("price")):
-        parts.append(f"{row.get('price'):.2f} TL")
+    return False
 
-    if pd.notna(row.get("discount_rate")) and row.get("discount_rate") > 0:
-        parts.append(f"%{row.get('discount_rate'):.1f} indirim")
 
-    if not parts:
-        return "Metin benzerliği ve fiyat skoruna göre önerildi."
-
+def build_reason(item: dict[str, Any], semantic_score: float, hour: int | None, allergies: list[str], diet: str | None) -> str:
+    parts = [f"semantik skor {semantic_score:.2f}"]
+    price = clean_number(item.get("price"))
+    discount = clean_number(item.get("discount_rate"))
+    if price is not None:
+        parts.append(f"{price:.2f} TL")
+    if discount is not None and discount > 0:
+        parts.append(f"%{discount:.1f} indirim")
+    if hour is not None:
+        parts.append(f"saat {hour} bağlamı dikkate alındı")
+    if allergies:
+        parts.append("alerjen filtreleri uygulandı")
+    if diet:
+        parts.append(f"diyet tercihi: {diet}")
     return ", ".join(parts) + "."
 
 
-def recommend(user_text, limit=10):
-    df = load_items()
-    intent = infer_intent(user_text)
+def build_candidate_rows(raw_results: list[tuple[dict[str, Any], float]], hour: int | None, allergies: list[str], diet: str | None) -> list[dict[str, Any]]:
+    rows = []
+    for item, semantic_score in raw_results:
+        if should_drop_item(item, hour=hour, allergies=allergies, diet=diet):
+            continue
 
-    candidates = filter_candidates(df, intent)
+        price = clean_number(item.get("price"))
+        if price is None or price <= 0:
+            continue
 
-    if candidates.empty:
-        return {
-            "intent": intent,
-            "count": 0,
-            "recommendations": [],
+        row = {
+            "platform": item.get("platform"),
+            "city": item.get("city") or "bursa",
+            "restaurant_name": item.get("restaurant_name"),
+            "restaurant_rating": clean_number(item.get("restaurant_rating")),
+            "category": item.get("category") or "Genel",
+            "item_name": item.get("item_name"),
+            "price": price,
+            "original_price": clean_number(item.get("original_price")),
+            "discount_rate": clean_number(item.get("discount_rate")),
+            "product_url": item.get("product_url"),
+            "image_url": item.get("image_url") or "",
+            "semantic_score": round(float(semantic_score), 4),
+            "score": round(float(semantic_score), 4),
+            "reason": build_reason(item, semantic_score, hour, allergies, diet),
         }
+        row["restaurant_key"] = normalize_text(row["restaurant_name"])
+        row["item_key"] = normalize_text(row["item_name"])
+        rows.append(row)
+    return rows
 
-    vectorizer = TfidfVectorizer(
-        min_df=1,
-        ngram_range=(1, 2),
-        sublinear_tf=True,
-    )
 
-    item_vectors = vectorizer.fit_transform(candidates["model_text"])
-    query_text = build_query_text(intent)
-    query_vector = vectorizer.transform([query_text])
+def group_platform_prices(rows: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
+    if not rows:
+        return []
 
-    similarity = cosine_similarity(query_vector, item_vectors).flatten()
+    df = pd.DataFrame(rows)
+    df = df.sort_values(["restaurant_key", "item_key", "platform", "price", "semantic_score"], ascending=[True, True, True, True, False])
+    df = df.drop_duplicates(subset=["restaurant_key", "item_key", "platform"], keep="first")
 
-    candidates = candidates.copy()
-    candidates["ml_similarity"] = similarity
-    candidates["business_score"] = candidates.apply(lambda row: calculate_business_score(row, intent), axis=1)
+    grouped_items = []
+    for _, group in df.groupby(["restaurant_key", "item_key"], sort=False):
+        group = group.sort_values("price", ascending=True)
+        best = group.iloc[0]
+        platforms = []
+        for _, row in group.iterrows():
+            platforms.append(
+                {
+                    "name": row.get("platform"),
+                    "price": clean_number(row.get("price")),
+                    "original_price": clean_number(row.get("original_price")),
+                    "discount_rate": clean_number(row.get("discount_rate")),
+                    "url": row.get("product_url"),
+                }
+            )
 
-    candidates["score"] = (
-        candidates["ml_similarity"] * 0.70 +
-        candidates["business_score"] * 0.30
-    )
+        prices = [platform["price"] for platform in platforms if platform["price"] is not None]
+        min_price = min(prices) if prices else None
+        max_price = max(prices) if prices else None
+        price_gap = round(max_price - min_price, 2) if min_price is not None and max_price is not None else None
 
-    candidates["dedupe_key"] = (
-        candidates["platform"].fillna("") + "|" +
-        candidates["restaurant_name"].fillna("") + "|" +
-        candidates["item_name"].fillna("").apply(normalize_text)
-    )
-
-    candidates = candidates.sort_values(["score", "ml_similarity", "price"], ascending=[False, False, True])
-    candidates = candidates.drop_duplicates(subset=["dedupe_key"])
-
-    results = []
-
-    for _, row in candidates.head(limit).iterrows():
-        original_price = row.get("original_price")
-        discount_rate = row.get("discount_rate")
-
-        results.append(
+        grouped_items.append(
             {
-                "platform": row.get("platform"),
-                "restaurant_name": row.get("restaurant_name"),
-                "item_name": row.get("item_name"),
-                "price": round(float(row.get("price")), 2),
-                "original_price": None if pd.isna(original_price) else round(float(original_price), 2),
-                "discount_rate": None if pd.isna(discount_rate) else round(float(discount_rate), 2),
-                "product_url": row.get("product_url"),
-                "score": round(float(row.get("score")), 4),
-                "ml_similarity": round(float(row.get("ml_similarity")), 4),
-                "reason": build_reason(row, intent),
+                "sort_price": min_price if min_price is not None else float("inf"),
+                "sort_score": float(group["semantic_score"].max()),
+                "sehir": {"ad": best.get("city")},
+                "restoran": {
+                    "ad": best.get("restaurant_name"),
+                    "puan": clean_number(best.get("restaurant_rating")),
+                },
+                "kategori": {"ad": best.get("category")},
+                "urun": {
+                    "ad": best.get("item_name"),
+                    "fiyat": min_price,
+                    "orijinal_fiyat": clean_number(best.get("original_price")),
+                    "indirim_yuzdesi": clean_number(best.get("discount_rate")),
+                    "gorsel_url": best.get("image_url") or "",
+                    "urun_url": best.get("product_url"),
+                    "musait_mi": True,
+                    "platforms": platforms,
+                    "platform_sayisi": len(platforms),
+                    "en_ucuz_platform": platforms[0]["name"] if platforms else None,
+                    "fiyat_farki": price_gap,
+                },
+                "ai": {
+                    "skor": round(float(group["semantic_score"].max()), 4),
+                    "semantic_skoru": round(float(group["semantic_score"].max()), 4),
+                    "neden": best.get("reason"),
+                },
             }
         )
 
+    grouped_items = sorted(grouped_items, key=lambda item: (item["sort_price"], -item["sort_score"]))[:limit]
+
+    for index, item in enumerate(grouped_items, start=1):
+        item["sira"] = index
+        item.pop("sort_price", None)
+        item.pop("sort_score", None)
+
+    return grouped_items
+
+
+def recommend(
+    engine: RecommenderEngine,
+    query: str,
+    limit: int = 10,
+    hour: int | None = None,
+    allergies: list[str] | None = None,
+    diet: str | None = None,
+) -> dict[str, Any]:
+    allergies = allergies or []
+    intent = infer_intent(query)
+    raw_results = engine.search(query=query, top_k=50)
+    rows = build_candidate_rows(raw_results, hour=hour, allergies=allergies, diet=diet)
+    grouped = group_platform_prices(rows, limit=limit)
+
     return {
+        "tip": "ai_grouped_recommendation_response",
+        "engine": "sentence_transformer_faiss_lifespan",
         "intent": intent,
-        "count": len(results),
-        "recommendations": results,
+        "filters": {
+            "hour": hour,
+            "allergies": allergies,
+            "diet": diet,
+        },
+        "toplam_oneri": len(grouped),
+        "oneriler": grouped,
+        "recommendations": grouped,
     }
 
 
 if __name__ == "__main__":
-    query = " ".join(sys.argv[1:]).strip()
-
-    if not query:
-        query = input("Ne yemek istersin? ")
-
-    output = recommend(query, limit=10)
-
+    import sys
+    query = " ".join(sys.argv[1:]).strip() or "pizza öner"
+    engine = load_recommender()
+    output = recommend(engine=engine, query=query, limit=10, hour=19, allergies=[], diet="Standart")
     print(json.dumps(output, ensure_ascii=False, indent=2))
