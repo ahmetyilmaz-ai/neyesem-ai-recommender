@@ -75,6 +75,14 @@ HEALTHY_WORDS = [
     "salata", "fit", "bowl", "ızgara", "izgara", "hafif", "protein", "tavuk",
 ]
 
+SIDE_DISH_WORDS = [
+    "patates", "kızartma", "kizartma", "fries", "cips", "chips", "nugget sos",
+]
+
+PROMO_WORDS = [
+    "ilkyemek", "kupon", "kampanya", "indirim kodu", "kod", "promo", "promosyon",
+]
+
 
 class RecommenderNotReadyError(RuntimeError):
     pass
@@ -134,6 +142,24 @@ def item_text(item: dict[str, Any]) -> str:
             str(item.get("restaurant_name") or ""),
         ]
     )
+
+
+def product_text(item: dict[str, Any]) -> str:
+    # Ürün filtresinde restoran adını kullanmıyoruz. Yoksa "Manville Burger" içindeki
+    # burger kelimesi, "Patates Kızartması" gibi yan ürünleri protein sanabiliyor.
+    return " ".join([str(item.get("item_name") or ""), str(item.get("category") or "")])
+
+
+def is_promo_or_code_product(item: dict[str, Any]) -> bool:
+    raw_name = str(item.get("item_name") or "").strip()
+    normalized = normalize_text(raw_name)
+    if has_any(normalized, PROMO_WORDS):
+        return True
+    if re.fullmatch(r"[a-z]+\d+[a-z0-9]*", normalized):
+        return True
+    if re.fullmatch(r"[a-z0-9]{8,}", normalized) and any(char.isdigit() for char in normalized):
+        return True
+    return False
 
 
 def infer_intent(query: str) -> dict[str, Any]:
@@ -240,53 +266,55 @@ def load_recommender() -> RecommenderEngine:
 
 def should_drop_item(item: dict[str, Any], intent: dict[str, Any], hour: int | None, allergies: list[str], diet: str | None) -> bool:
     text = item_text(item)
+    product = product_text(item)
     normalized_category = normalize_text(item.get("category"))
     normalized_diet = normalize_text(diet)
     normalized_allergies = [normalize_text(allergy) for allergy in allergies or []]
     preference = intent.get("preference")
     categories = intent.get("categories") or []
 
-    if hour is not None and 6 <= int(hour) <= 11 and has_any(text, HEAVY_MORNING_WORDS):
+    if is_promo_or_code_product(item):
+        return True
+
+    if hour is not None and 6 <= int(hour) <= 11 and has_any(product, HEAVY_MORNING_WORDS):
         return True
 
     if "laktoz" in normalized_allergies or "lactose" in normalized_allergies:
-        if has_any(text, LACTOSE_WORDS):
+        if has_any(product, LACTOSE_WORDS):
             return True
 
-    if normalized_diet in ["vegan", "vejetaryen", "vegetarian"] and has_any(text, MEAT_WORDS):
+    if normalized_diet in ["vegan", "vejetaryen", "vegetarian"] and has_any(product, MEAT_WORDS):
         return True
 
-    # Kullanıcı içecek istemediyse ana önerilere içecek sokma. Su/ayran/pepsi burada elenir.
-    if "icecek" not in categories and (normalized_category in ["icecek", "içecek"] or has_any(text, DRINK_WORDS)):
+    if "icecek" not in categories and (normalized_category in ["icecek", "içecek"] or has_any(product, DRINK_WORDS)):
         return True
 
-    # Sos, ketçap, mayonez gibi ürünler ana öneri değildir.
-    if has_any(text, ADDON_WORDS):
+    if has_any(product, ADDON_WORDS):
         return True
 
     if preference == "protein":
-        if has_any(text, DESSERT_WORDS) or has_any(text, DRINK_WORDS):
+        if has_any(product, DESSERT_WORDS) or has_any(product, DRINK_WORDS) or has_any(product, SIDE_DISH_WORDS):
             return True
-        if not has_any(text, PROTEIN_WORDS):
+        if not has_any(product, PROTEIN_WORDS):
             return True
 
     if preference == "filling":
-        if has_any(text, DESSERT_WORDS) or has_any(text, DRINK_WORDS):
+        if has_any(product, DESSERT_WORDS) or has_any(product, DRINK_WORDS):
             return True
-        if not has_any(text, FILLING_WORDS):
+        if not has_any(product, FILLING_WORDS):
             return True
 
     if preference == "healthy":
-        if has_any(text, DESSERT_WORDS) or has_any(text, DRINK_WORDS):
+        if has_any(product, DESSERT_WORDS) or has_any(product, DRINK_WORDS):
             return True
-        if not has_any(text, HEALTHY_WORDS):
+        if not has_any(product, HEALTHY_WORDS):
             return True
 
     return False
 
 
 def calculate_business_score(item: dict[str, Any], semantic_score: float, intent: dict[str, Any], hour: int | None) -> float:
-    text = item_text(item)
+    text = product_text(item)
     price = clean_number(item.get("price")) or 0.0
     discount = clean_number(item.get("discount_rate")) or 0.0
     preference = intent.get("preference")
@@ -439,7 +467,6 @@ def group_platform_prices(rows: list[dict[str, Any]], limit: int) -> list[dict[s
             }
         )
 
-    # Öneride önce alaka/final skor, sonra fiyat. Platform dizisi zaten fiyat sıralı.
     grouped_items = sorted(grouped_items, key=lambda item: (-item["sort_score"], item["sort_price"]))[:limit]
 
     for index, item in enumerate(grouped_items, start=1):
