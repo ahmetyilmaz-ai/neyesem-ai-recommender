@@ -1,19 +1,35 @@
+from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from .homepage_recommender import generate_homepage_recommendations
-from .semantic_recommender import semantic_recommend
+from .recommender import RecommenderNotReadyError, load_recommender, recommend
 from .compare_engine import compare_items
-from .db_output_adapter import adapt_homepage_response, adapt_recommend_response
+from .db_output_adapter import adapt_homepage_response
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        app.state.recommender_engine = load_recommender()
+        app.state.recommender_ready = True
+        app.state.recommender_error = None
+    except Exception as exc:
+        app.state.recommender_engine = None
+        app.state.recommender_ready = False
+        app.state.recommender_error = str(exc)
+    yield
+    app.state.recommender_engine = None
 
 
 app = FastAPI(
     title="NeYesem AI Recommender",
-    description="Semantic search, comparison, cold-start and content-based food recommendation API",
-    version="0.3.0",
+    description="Semantic FAISS recommendation and comparison API",
+    version="0.4.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -23,6 +39,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class RecommendRequest(BaseModel):
+    query: str
+    limit: int = 10
+    hour: Optional[int] = None
+    allergies: list[str] = Field(default_factory=list)
+    diet: Optional[str] = None
 
 
 class RecommendationContext(BaseModel):
@@ -39,9 +63,12 @@ class UserProfile(BaseModel):
     max_budget: Optional[float] = None
 
 
-class RecommendRequest(BaseModel):
+class CompareRequest(BaseModel):
     query: str
     limit: int = 10
+    hour: Optional[int] = None
+    allergies: list[str] = Field(default_factory=list)
+    diet: Optional[str] = None
     context: Optional[RecommendationContext] = None
     user_profile: Optional[UserProfile] = None
 
@@ -56,12 +83,26 @@ def model_to_dict(value):
     return dict(value)
 
 
+def get_loaded_engine(request: Request):
+    engine = getattr(request.app.state, "recommender_engine", None)
+    if engine is None:
+        error = getattr(request.app.state, "recommender_error", None)
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": "AI recommender is not ready. Run python .\\src\\build_index.py first.",
+                "error": error,
+            },
+        )
+    return engine
+
+
 @app.get("/")
 def root():
     return {
         "service": "NeYesem AI Recommender",
         "status": "ok",
-        "engine": "sentence-transformer-faiss",
+        "engine": "sentence-transformer-faiss-lifespan",
         "docs": "/docs",
         "endpoints": {
             "health": "/health",
@@ -76,15 +117,19 @@ def root():
 
 
 @app.get("/health")
-def health():
+def health(request: Request):
     return {
-        "status": "ok",
+        "status": "ok" if getattr(request.app.state, "recommender_ready", False) else "degraded",
         "service": "neyesem-ai-recommender",
-        "engine": "sentence-transformer-faiss",
+        "engine": "sentence-transformer-faiss-lifespan",
+        "model_loaded": bool(getattr(request.app.state, "recommender_ready", False)),
+        "model_error": getattr(request.app.state, "recommender_error", None),
         "features": [
             "cold_start_homepage",
             "semantic_recommendation",
-            "price_comparison",
+            "lifespan_model_loading",
+            "business_filtering",
+            "grouped_platform_prices",
             "db_compatible_output",
         ],
     }
@@ -96,22 +141,36 @@ def homepage(limit: int = 8):
 
 
 @app.post("/recommend")
-def recommend_items(request: RecommendRequest):
-    return semantic_recommend(
-        query=request.query,
-        limit=request.limit,
-        context=model_to_dict(request.context),
-        user_profile=model_to_dict(request.user_profile),
-    )
+def recommend_items(request: Request, payload: RecommendRequest):
+    engine = get_loaded_engine(request)
+    try:
+        return recommend(
+            engine=engine,
+            query=payload.query,
+            limit=payload.limit,
+            hour=payload.hour,
+            allergies=payload.allergies,
+            diet=payload.diet,
+        )
+    except RecommenderNotReadyError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post("/compare")
-def compare_recommendations(request: RecommendRequest):
+def compare_recommendations(payload: CompareRequest):
+    context = model_to_dict(payload.context)
+    user_profile = model_to_dict(payload.user_profile)
+    if payload.hour is not None:
+        context["hour"] = payload.hour
+    if payload.diet is not None:
+        user_profile["diet"] = payload.diet
+    if payload.allergies:
+        user_profile["allergies"] = payload.allergies
     return compare_items(
-        query=request.query,
-        limit=request.limit,
-        context=model_to_dict(request.context),
-        user_profile=model_to_dict(request.user_profile),
+        query=payload.query,
+        limit=payload.limit,
+        context=context,
+        user_profile=user_profile,
     )
 
 
@@ -122,21 +181,21 @@ def db_homepage(limit: int = 8):
 
 
 @app.post("/db/recommend")
-def db_recommend_items(request: RecommendRequest):
-    response = semantic_recommend(
-        query=request.query,
-        limit=request.limit,
-        context=model_to_dict(request.context),
-        user_profile=model_to_dict(request.user_profile),
-    )
-    return adapt_recommend_response(response)
+def db_recommend_items(request: Request, payload: RecommendRequest):
+    engine = get_loaded_engine(request)
+    try:
+        return recommend(
+            engine=engine,
+            query=payload.query,
+            limit=payload.limit,
+            hour=payload.hour,
+            allergies=payload.allergies,
+            diet=payload.diet,
+        )
+    except RecommenderNotReadyError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post("/db/compare")
-def db_compare_recommendations(request: RecommendRequest):
-    return compare_items(
-        query=request.query,
-        limit=request.limit,
-        context=model_to_dict(request.context),
-        user_profile=model_to_dict(request.user_profile),
-    )
+def db_compare_recommendations(payload: CompareRequest):
+    return compare_recommendations(payload)
