@@ -4,16 +4,32 @@ from pathlib import Path
 
 import pandas as pd
 
-from .recommender import (
-    load_items,
-    normalize_text,
-    CATEGORY_KEYWORDS,
-    FILLING_WORDS,
-    is_addon_item,
-)
+from .recommender import normalize_text, FILLING_WORDS
+from .build_index import is_addon_item, load_and_clean_items
 
 
 OUTPUT_PATH = Path("data/homepage_recommendations.json")
+
+
+# Ana sayfa bölümlerinde kullanılan kategori anahtarları.
+# recommender.CATEGORY_KEYWORDS diacritic'siz anahtarlar (doner, tatli) kullandığı
+# için ana sayfanın ihtiyaç duyduğu anahtarları burada netleştiriyoruz.
+CATEGORY_KEYWORDS = {
+    "pizza": ["pizza"],
+    "burger": ["burger", "hamburger"],
+    "döner": ["döner", "doner"],
+    "pide": ["pide", "lahmacun"],
+    "tavuk": ["tavuk", "chicken", "kanat"],
+    "tatlı": [
+        "tatlı", "tatli", "waffle", "pasta", "baklava", "dondurma",
+        "sütlaç", "sutlac", "kazandibi", "magnolia", "brownie",
+    ],
+}
+
+
+def load_items():
+    """all_items.json verisini temizleyip ana sayfa skorlaması için DataFrame döndürür."""
+    return pd.DataFrame(load_and_clean_items())
 
 
 MAIN_FOOD_CATEGORIES = [
