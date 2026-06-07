@@ -78,7 +78,14 @@ MORNING_FRIENDLY_WORDS = [
 ]
 
 ALLERGY_KEYWORDS = {
-    "laktoz": ["süt", "sut", "peynir", "yoğurt", "yogurt", "ayran", "dondurma", "krema", "milk", "cheese"],
+    "laktoz": [
+        "süt", "sut", "peynir", "yoğurt", "yogurt", "ayran", "dondurma", "krema",
+        "milk", "cheese", "kremalı", "kremali", "pasta", "kek", "cake", "tiramisu",
+        "muffin", "milkshake", "latte", "kaşar", "kasar", "labne", "kaymak",
+        "muhallebi", "trileçe", "trilece", "supangle", "künefe", "kunefe", "waffle",
+        "magnolia", "sütlaç", "sutlac", "kazandibi", "profiterol", "cheesecake",
+        "mozzarella", "parmesan", "tatlı", "tatli",
+    ],
     "gluten": ["ekmek", "pide", "lahmacun", "pizza", "burger", "makarna", "waffle", "pasta", "börek", "borek"],
     "soya": ["soya", "soy"],
     "yer fıstığı": ["yer fıstığı", "yer fistigi", "fıstık", "fistik", "peanut"],
@@ -98,7 +105,41 @@ MEAT_WORDS = [
     "sucuk",
     "kanat",
     "tantuni",
+    "dürüm",
+    "durum",
+    "lahmacun",
+    "iskender",
+    "pastırma",
+    "pastirma",
+    "jambon",
+    "salam",
+    "sosis",
+    "kavurma",
+    "pirzola",
+    "bonfile",
+    "şiş",
+    "sis",
+    "burger",
+    "piliç",
+    "pilic",
+    "kıyma",
+    "kiyma",
+    "nugget",
+    "wrap",
 ]
+
+SEAFOOD_WORDS = [
+    "balık", "balik", "hamsi", "midye", "karides", "somon", "levrek",
+    "çipura", "cipura", "kalamar", "ahtapot", "deniz",
+]
+
+# Vegan, et/deniz ürünlerine ek olarak süt ve yumurta ürünlerini de dışlar.
+EGG_WORDS = ["yumurta", "omlet", "menemen", "mayonez"]
+LACTOSE_WORDS = ALLERGY_KEYWORDS["laktoz"]
+
+# Adında malzeme geçmese bile bu kategoriler diyet/alerji açısından risklidir.
+MEAT_CATEGORIES = {"doner", "kebap", "tavuk"}
+LACTOSE_CATEGORIES = {"tatli", "pizza"}
 
 
 _ENGINE = None
@@ -314,10 +355,23 @@ def should_filter_item(item: dict[str, Any], intent: dict[str, Any], context: di
         if keywords and has_any(item_text, keywords):
             return True
 
+        # Adında malzeme geçmese de tatlı/pizza laktoz açısından risklidir.
+        if allergy_key in ["laktoz", "lactose"] and category in LACTOSE_CATEGORIES:
+            return True
+
     diet = normalize_text(user_profile.get("diet"))
 
     if diet in ["vegan", "vejetaryen", "vegetarian"]:
-        if has_any(item_text, MEAT_WORDS):
+        if category in MEAT_CATEGORIES:
+            return True
+        if has_any(item_text, MEAT_WORDS) or has_any(item_text, SEAFOOD_WORDS):
+            return True
+
+    # Vegan ek olarak süt ve yumurta içeren ürünleri de dışlar (vejetaryen sütü kabul eder).
+    if diet == "vegan":
+        if category in LACTOSE_CATEGORIES:
+            return True
+        if has_any(item_text, LACTOSE_WORDS) or has_any(item_text, EGG_WORDS):
             return True
 
     # Protein / spor odaklı sorgularda sos, tatlı, içecek ve yan ürünleri temizle.

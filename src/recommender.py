@@ -35,14 +35,34 @@ HEAVY_MORNING_WORDS = [
 
 LACTOSE_WORDS = [
     "süt", "sut", "milk", "peynir", "cheese", "yoğurt", "yogurt", "ayran",
-    "dondurma", "krema", "magnolia", "sütlaç", "sutlac", "kazandibi",
-    "profiterol", "cheesecake", "mozzarella", "parmesan",
+    "dondurma", "krema", "kremalı", "kremali", "magnolia", "sütlaç", "sutlac",
+    "kazandibi", "profiterol", "cheesecake", "mozzarella", "parmesan",
+    "pasta", "kek", "cake", "tiramisu", "muffin", "milkshake", "latte",
+    "kaşar", "kasar", "labne", "kaymak", "muhallebi", "trileçe", "trilece",
+    "supangle", "künefe", "kunefe", "waffle", "tatlı", "tatli",
 ]
 
 MEAT_WORDS = [
     "et", "dana", "tavuk", "chicken", "köfte", "kofte", "döner", "doner",
     "kebap", "kebab", "sucuk", "kanat", "tantuni", "burger",
+    "dürüm", "durum", "lahmacun", "iskender", "pastırma", "pastirma",
+    "jambon", "salam", "sosis", "kavurma", "pirzola", "bonfile", "şiş", "sis",
+    "piliç", "pilic", "kıyma", "kiyma", "nugget", "wrap",
 ]
+
+SEAFOOD_WORDS = [
+    "balık", "balik", "hamsi", "midye", "karides", "somon", "levrek",
+    "çipura", "cipura", "kalamar", "ahtapot", "deniz",
+]
+
+# Vegan, et/deniz ürünlerine ek olarak süt ve yumurta ürünlerini de dışlar.
+EGG_WORDS = ["yumurta", "omlet", "menemen", "mayonez"]
+
+# Adında et/süt kelimesi geçmese bile bu kategoriler neredeyse her zaman risklidir.
+# Bu sayede "Double Dürüm" (et) vegan filtresinden, "Doğum Günü Pasta" (süt)
+# laktoz filtresinden kaçamaz.
+MEAT_CATEGORIES = {"doner", "kebap", "tavuk"}
+LACTOSE_CATEGORIES = {"tatli", "pizza"}
 
 DRINK_WORDS = [
     "su", "ayran", "kola", "pepsi", "fanta", "sprite", "ice tea", "fuse tea",
@@ -82,6 +102,14 @@ SIDE_DISH_WORDS = [
 PROMO_WORDS = [
     "ilkyemek", "kupon", "kampanya", "indirim kodu", "kod", "promo", "promosyon",
 ]
+
+
+# Literal eşleşmede boost'u bozan dolgu kelimeleri (anlam taşımayanlar).
+QUERY_STOPWORDS = {
+    "bir", "sey", "seyler", "oner", "onerir", "onerisi", "istiyorum", "isterim",
+    "lutfen", "biraz", "bana", "icin", "ile", "gibi", "olsun", "olan", "var",
+    "yemek", "yiyecek", "canim", "istiyom", "ver", "bul",
+}
 
 
 class RecommenderNotReadyError(RuntimeError):
@@ -280,11 +308,21 @@ def should_drop_item(item: dict[str, Any], intent: dict[str, Any], hour: int | N
         return True
 
     if "laktoz" in normalized_allergies or "lactose" in normalized_allergies:
-        if has_any(product, LACTOSE_WORDS):
+        if normalized_category in LACTOSE_CATEGORIES or has_any(product, LACTOSE_WORDS):
             return True
 
-    if normalized_diet in ["vegan", "vejetaryen", "vegetarian"] and has_any(product, MEAT_WORDS):
-        return True
+    if normalized_diet in ["vegan", "vejetaryen", "vegetarian"]:
+        if normalized_category in MEAT_CATEGORIES:
+            return True
+        if has_any(product, MEAT_WORDS) or has_any(product, SEAFOOD_WORDS):
+            return True
+
+    # Vegan ek olarak süt ve yumurta içeren ürünleri de dışlar (vejetaryen sütü kabul eder).
+    if normalized_diet == "vegan":
+        if normalized_category in LACTOSE_CATEGORIES:
+            return True
+        if has_any(product, LACTOSE_WORDS) or has_any(product, EGG_WORDS):
+            return True
 
     if "icecek" not in categories and (normalized_category in ["icecek", "içecek"] or has_any(product, DRINK_WORDS)):
         return True
@@ -321,6 +359,33 @@ def calculate_business_score(item: dict[str, Any], semantic_score: float, intent
     budget_max = clean_number(intent.get("budget_max"))
 
     score = semantic_score * 0.70
+
+    # Kategori eşleşmesi: sorgu "tavuk" ise tavuk ürünlerini güçlü şekilde öne çıkar.
+    # Tek kelimelik kategori sorgularında semantik benzerlik zayıf kaldığı için kritik.
+    categories = intent.get("categories") or []
+    if categories:
+        item_category = normalize_text(item.get("category"))
+        matched = False
+        for category in categories:
+            keywords = CATEGORY_KEYWORDS.get(category, [category])
+            if has_any(text, keywords) or normalize_text(category) == item_category:
+                matched = True
+                break
+        if matched:
+            score += 0.45
+
+    # GENEL literal eşleşme: kullanıcının yazdığı kelime(ler) ürün adında geçiyorsa öne çıkar.
+    # Kategori listesinde OLMAYAN her kelime için de çalışır (mantı, iskender, sushi, kumpir...).
+    # Böylece "her yemeğe ayrı kural yazma" derdi ortadan kalkar.
+    query_tokens = [
+        token for token in normalize_text(intent.get("normalized_query")).split()
+        if len(token) >= 3 and token not in QUERY_STOPWORDS
+    ]
+    if query_tokens:
+        item_name_norm = normalize_text(item.get("item_name"))
+        literal_hits = sum(1 for token in query_tokens if token in item_name_norm)
+        if literal_hits:
+            score += min(literal_hits, 2) * 0.35
 
     if budget_max is not None and price <= budget_max:
         score += 0.12
@@ -488,6 +553,12 @@ def recommend(
     allergies = allergies or []
     intent = infer_intent(query)
     search_query = query
+    # Sorguda kategori tespit edildiyse (ör. "tavuk", "pizza") embedding'i o yöne
+    # çekmek için kategori anahtar kelimelerini sorguya ekle.
+    for category in intent.get("categories", []):
+        keywords = CATEGORY_KEYWORDS.get(category, [])
+        if keywords:
+            search_query += " " + " ".join(keywords[:3])
     if intent.get("preference") == "protein":
         search_query += " tavuk protein pilav ızgara et"
     elif intent.get("preference") == "filling":
@@ -496,7 +567,56 @@ def recommend(
         search_query += " sağlıklı hafif fit ızgara salata"
 
     raw_results = engine.search(query=search_query, top_k=max(limit * 30, 200))
+
+    # HİBRİT RETRIEVAL: ürün adında sorgu kelimesi geçen ürünleri de aday havuzuna ekle.
+    # Zayıf embedding'li tek kelimeler (kumpir, mantı, iskender...) semantik top-K'ya
+    # giremese bile, veride varsa bu yolla kesin yakalanır. (Sonsuz keyword yazma derdi yok.)
+    query_tokens = [
+        token for token in normalize_text(query).split()
+        if len(token) >= 3 and token not in QUERY_STOPWORDS
+    ]
+    if query_tokens:
+        seen_keys = {
+            (normalize_text(it.get("platform")), normalize_text(it.get("restaurant_name")),
+             normalize_text(it.get("item_name")))
+            for it, _ in raw_results
+        }
+        for it in engine.items:
+            name_norm = normalize_text(it.get("item_name"))
+            if any(token in name_norm for token in query_tokens):
+                key = (normalize_text(it.get("platform")),
+                       normalize_text(it.get("restaurant_name")), name_norm)
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    raw_results.append((it, 0.45))  # makul taban semantik skoru
+
     rows = build_candidate_rows(raw_results, intent=intent, hour=hour, allergies=allergies, diet=diet)
+
+    # ALAKA FİLTRESİ: sorguda anlamlı kelime varsa ve adında/kategorisinde gerçekten
+    # eşleşen ürünler bulunuyorsa, sadece onları göster (ör. "iskender" -> sadece iskender).
+    # Hiç eşleşme yoksa (veride olmayan yemek) semantik sonuçlara düşülür; boş ekran olmaz.
+    detected_categories = intent.get("categories") or []
+    # Filtreyi yalnızca dish/kategori sorgularında uygula. "yüksek proteinli ucuz" gibi
+    # tercih cümlelerinde should_drop_item zaten alakayı sağlar; literal filtre fazla daraltır.
+    apply_relevance = bool(detected_categories) or (
+        intent.get("preference") == "balanced" and bool(query_tokens)
+    )
+    if apply_relevance:
+        def _row_relevant(row):
+            name = normalize_text(row.get("item_name"))
+            if any(token in name for token in query_tokens):
+                return True
+            row_category = normalize_text(row.get("category"))
+            for category in detected_categories:
+                keywords = CATEGORY_KEYWORDS.get(category, [category])
+                if has_any(name, keywords) or normalize_text(category) == row_category:
+                    return True
+            return False
+
+        relevant_rows = [row for row in rows if _row_relevant(row)]
+        if relevant_rows:
+            rows = relevant_rows
+
     grouped = group_platform_prices(rows, limit=limit)
 
     return {
