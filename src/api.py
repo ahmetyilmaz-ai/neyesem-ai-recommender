@@ -9,6 +9,7 @@ from .homepage_recommender import generate_homepage_recommendations
 from .recommender import RecommenderNotReadyError, load_recommender, recommend
 from .compare_engine import compare_items
 from .db_output_adapter import adapt_homepage_response
+from .fake_discount import detect_suspicious_discounts
 
 
 @asynccontextmanager
@@ -138,6 +139,12 @@ def health(request: Request):
 @app.get("/homepage")
 def homepage(limit: int = 8):
     return generate_homepage_recommendations(limit=limit)
+
+
+@app.get("/suspicious-discounts")
+def suspicious_discounts(request: Request, limit: int = 20):
+    engine = get_loaded_engine(request)
+    return detect_suspicious_discounts(engine.items, limit=limit)
 
 
 @app.post("/recommend")
