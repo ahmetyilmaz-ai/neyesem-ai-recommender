@@ -1,6 +1,6 @@
 import json
 import re
-from statistics import mean
+from statistics import mean, median
 from typing import Any
 
 try:
@@ -149,11 +149,13 @@ def build_cross_platform_comparisons(items: list[dict[str, Any]], limit: int) ->
         for cluster in clusters:
             if cluster["category"] != item_category:
                 continue
+            # Kümenin SABİT çekirdek token'larına göre kıyasla (birleştirme yok):
+            # birleştirince küme büyüdükçe gevşer, alakasız ürünleri yutardı.
             similarity = token_similarity(item_tokens, cluster["tokens"])
             same_signature = product_signature(item) == cluster["signature"]
-            if same_signature or similarity >= 0.50:
+            # 0.85: neredeyse-aynı isim. 0.50 gevşekti (Ciabatta'yı Sandviç'e eşliyordu).
+            if same_signature or similarity >= 0.85:
                 cluster["items"].append(item)
-                cluster["tokens"] |= item_tokens
                 placed = True
                 break
 
@@ -192,6 +194,20 @@ def build_cross_platform_comparisons(items: list[dict[str, Any]], limit: int) ->
 
         platform_prices = [row for row in platform_prices if row["price"] is not None]
         if not platform_prices:
+            continue
+
+        # Aykırı değer filtresi: aynı kümeye düşmüş ama aslında FARKLI ürünleri
+        # (ör. 10 TL "barbekü baharatı" vs 450 TL "barbekü menü") ayıkla. Gerçek
+        # platformlar-arası fiyat farkı genelde <2.5x'tir; bunun dışı yanlış eşleşmedir.
+        OUTLIER_FACTOR = 2.5
+        med = median([row["price"] for row in platform_prices])
+        if med > 0:
+            platform_prices = [
+                row for row in platform_prices
+                if med / OUTLIER_FACTOR <= row["price"] <= med * OUTLIER_FACTOR
+            ]
+        # Karşılaştırma anlamlı olsun: en az 2 farklı platform kalmalı.
+        if len({row["platform"] for row in platform_prices}) < 2:
             continue
 
         prices = [row["price"] for row in platform_prices]
