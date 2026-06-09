@@ -75,6 +75,13 @@ def calculate_discount_score(discount: float | None) -> float:
 
 def canonical_tokens(item_name: Any) -> set[str]:
     text = normalize_text(item_name)
+    # Boyut/birim (330 ml, 1 lt, 500 gr) ürün KİMLİĞİNİN parçası: tek token olarak sakla
+    # ("330ml", "1lt") ki "Ayran 1lt" ile "Ayran 175ml" aynı sanılmasın.
+    size_tokens = {
+        f"{num.replace(',', '.')}{unit}"
+        for num, unit in re.findall(r"(\d+(?:[.,]\d+)?)\s*(gr|g|ml|cl|lt|l|kg)\b", text)
+    }
+    # Birimden arta kalan çıplak sayıları temizle.
     text = re.sub(r"\b\d+(?:[.,]\d+)?\b", " ", text)
     tokens = []
     for token in text.split():
@@ -84,7 +91,7 @@ def canonical_tokens(item_name: Any) -> set[str]:
         if token in GROUP_STOPWORDS:
             continue
         tokens.append(token)
-    return set(tokens)
+    return set(tokens) | size_tokens
 
 
 def token_similarity(left: set[str], right: set[str]) -> float:
@@ -139,39 +146,18 @@ def build_platform_comparison(items: list[dict[str, Any]]) -> list[dict[str, Any
 
 
 def build_cross_platform_comparisons(items: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
-    clusters: list[dict[str, Any]] = []
-
+    # İMZA-TEMELLİ O(n) gruplama: aynı kategori + aynı (boyut-duyarlı) token imzası
+    # olan ürünler tek gruba girer. Fuzzy eşleştirme (O(n²)) yerine bu hem HIZLI
+    # (tüm veride çalışır) hem de yanlış eşleşme yapmaz — imza birebir aynı olmalı.
+    groups: dict[str, list[dict[str, Any]]] = {}
     for item in items:
-        item_category = normalize_text(item.get("category"))
-        item_tokens = canonical_tokens(item.get("item_name"))
-        placed = False
-
-        for cluster in clusters:
-            if cluster["category"] != item_category:
-                continue
-            # Kümenin SABİT çekirdek token'larına göre kıyasla (birleştirme yok):
-            # birleştirince küme büyüdükçe gevşer, alakasız ürünleri yutardı.
-            similarity = token_similarity(item_tokens, cluster["tokens"])
-            same_signature = product_signature(item) == cluster["signature"]
-            # 0.85: neredeyse-aynı isim. 0.50 gevşekti (Ciabatta'yı Sandviç'e eşliyordu).
-            if same_signature or similarity >= 0.85:
-                cluster["items"].append(item)
-                placed = True
-                break
-
-        if not placed:
-            clusters.append(
-                {
-                    "category": item_category,
-                    "tokens": set(item_tokens),
-                    "signature": product_signature(item),
-                    "items": [item],
-                }
-            )
+        groups.setdefault(product_signature(item), []).append(item)
 
     result = []
-    for cluster in clusters:
-        cluster_items = cluster["items"]
+    for cluster_items in groups.values():
+        # En az 2 farklı platformda olmayan grubu atla (karşılaştırma anlamsız).
+        if len({it.get("platform") for it in cluster_items}) < 2:
+            continue
         by_platform: dict[str, list[dict[str, Any]]] = {}
         for item in cluster_items:
             by_platform.setdefault(item.get("platform") or "unknown", []).append(item)
@@ -238,6 +224,34 @@ def build_cross_platform_comparisons(items: list[dict[str, Any]], limit: int) ->
         key=lambda row: (row["platform_count"], row["saving_rate_percent"], -row["min_price"]),
         reverse=True,
     )[:limit]
+
+
+def _expand_with_cross_platform_twins(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Aday ürünlerin tüm veri kümesindeki aynı-imzalı (boyut-duyarlı) eşlerini ekler.
+
+    Neden: Getir (28k) Trendyol'dan (2k) çok büyük olduğu için sorgunun ilk ~80 adayı
+    çoğunlukla tek platformdan gelir; platformlar-arası çift hiç çıkmaz. Aday ürünün
+    imzasını tüm kataloga karşı arayıp diğer platformdaki eşini de havuza katarız.
+    """
+    try:
+        from .semantic_recommender import get_engine
+    except ImportError:
+        from semantic_recommender import get_engine
+    try:
+        all_items = get_engine().items
+    except Exception:
+        return candidates
+
+    wanted = {product_signature(c) for c in candidates}
+    pool = list(candidates)
+    seen = {item_key(c) for c in candidates}
+    for item in all_items:
+        if product_signature(item) in wanted:
+            key = item_key(item)
+            if key not in seen:
+                seen.add(key)
+                pool.append(item)
+    return pool
 
 
 def compare_items(
@@ -341,7 +355,9 @@ def compare_items(
             for item in best_value_items
         ],
         "platform_comparison": build_platform_comparison(candidates),
-        "cross_platform_comparisons": build_cross_platform_comparisons(candidates, limit),
+        "cross_platform_comparisons": build_cross_platform_comparisons(
+            _expand_with_cross_platform_twins(candidates), limit
+        ),
     }
 
 

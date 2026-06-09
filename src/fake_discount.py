@@ -29,10 +29,18 @@ def _normalize(value: Any) -> str:
     for src, dst in {"ı": "i", "ğ": "g", "ü": "u", "ş": "s", "ö": "o", "ç": "c"}.items():
         value = value.replace(src, dst)
     value = re.sub(r"[^a-z0-9\s]", " ", value)
-    # boyut/birim ekleri (aile boyu, 500 gr, 1 lt...) ürün kimliğini bozmasın diye sadeleştir
-    value = re.sub(r"\b\d+\s*(gr|g|ml|cl|lt|l|adet|kg|cm)\b", " ", value)
+    # ÖNEMLİ: boyut/birim (1 lt, 330 ml, 500 gr) ürün KİMLİĞİNİN parçası — silinirse
+    # "Ayran 1lt" ile "Ayran 175ml" aynı sanılır ve sahte fiyat farkı uydurulur.
+    # Birimi kanonik hale getir (boşluğu kaldır) ki "1 lt" == "1lt" eşleşsin ama 1lt != 175ml.
+    value = re.sub(r"\b(\d+)\s*(gr|g|ml|cl|lt|l|adet|kg|cm)\b", r"\1\2", value)
+    # Sadece pazarlama/porsiyon sıfatlarını sadeleştir (boyut sayısını DEĞİL).
     value = re.sub(r"\b(buyuk|kucuk|orta|aile|boyu|boy|mega|jumbo|tek|cift|porsiyon|menu|menusu)\b", " ", value)
     return re.sub(r"\s+", " ", value).strip()
+
+
+# Aynı ürün başka platformda en fazla bu kadar ucuz olabilir; daha fazlası
+# (ör. 99 TL "Ayran 1lt" vs 7 TL küçük ayran) farklı ürün/boyut eşleşmesidir.
+MAX_CROSS_PLATFORM_RATIO = 2.5
 
 
 ABSURD_MARKUP_FACTOR = 3.0    # orijinal / indirimli oranı
@@ -76,7 +84,11 @@ def detect_suspicious_discounts(items: list[dict[str, Any]], limit: int = 20) ->
         if len(platforms) >= 2:
             elsewhere = [
                 lst for lst in listings
-                if lst["platform"] != item.get("platform") and lst["price"] < price
+                if lst["platform"] != item.get("platform")
+                and lst["price"] < price
+                # Makul aralık: gerçekten aynı ürün ~2.5x'ten fazla ucuz olmaz;
+                # ötesi farklı boyut/ürün eşleşmesi (yanlış pozitif) demektir.
+                and lst["price"] >= price / MAX_CROSS_PLATFORM_RATIO
             ]
             if elsewhere:
                 cheapest = min(elsewhere, key=lambda x: x["price"])
