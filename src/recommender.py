@@ -109,6 +109,12 @@ QUERY_STOPWORDS = {
     "bir", "sey", "seyler", "oner", "onerir", "onerisi", "istiyorum", "isterim",
     "lutfen", "biraz", "bana", "icin", "ile", "gibi", "olsun", "olan", "var",
     "yemek", "yiyecek", "canim", "istiyom", "ver", "bul",
+    # Tercih/sıfat kelimeleri: bunlar preference kurallarıyla işlenir; ürün adında
+    # geçmeleri (ör. "Proteini Yüksek ...") gerçek protein kaynağı anlamına gelmez,
+    # bu yüzden literal isim eşleşmesini sürüklemesinler.
+    "protein", "proteini", "proteinli", "yuksek", "ucuz", "uygun", "ekonomik",
+    "doyurucu", "saglikli", "hafif", "fit", "lezzetli", "taze", "spor", "spordan",
+    "ciktim", "acim", "aciktim",
 }
 
 
@@ -532,7 +538,25 @@ def group_platform_prices(rows: list[dict[str, Any]], limit: int) -> list[dict[s
             }
         )
 
-    grouped_items = sorted(grouped_items, key=lambda item: (-item["sort_score"], item["sort_price"]))[:limit]
+    grouped_items = sorted(grouped_items, key=lambda item: (-item["sort_score"], item["sort_price"]))
+
+    # Çeşitlilik: tek bir zincir (ör. Komagene'nin tüm şubeleri) ya da aynı isimli ürün
+    # sonuçları domine etmesin. Restoran adındaki ", Şube/Mahalle" eki atılıp ZİNCİR
+    # bazında sayılır; aynı isimli ürün bir kez gösterilir. Limit dolmazsa kalanlardan tamamlanır.
+    max_per_chain = 2
+    primary, overflow = [], []
+    chain_counts: dict[str, int] = {}
+    seen_names: set[str] = set()
+    for item in grouped_items:
+        name_key = normalize_text(item.get("urun", {}).get("ad"))
+        chain_key = normalize_text((item.get("restoran", {}).get("ad") or "").split(",")[0])
+        if (name_key and name_key in seen_names) or chain_counts.get(chain_key, 0) >= max_per_chain:
+            overflow.append(item)
+            continue
+        seen_names.add(name_key)
+        chain_counts[chain_key] = chain_counts.get(chain_key, 0) + 1
+        primary.append(item)
+    grouped_items = (primary + overflow)[:limit]
 
     for index, item in enumerate(grouped_items, start=1):
         item["sira"] = index
