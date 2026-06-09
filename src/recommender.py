@@ -168,6 +168,12 @@ def has_any(text: str, words: list[str]) -> bool:
     return False
 
 
+def token_starts_word(token: str, text_norm: str) -> bool:
+    """Kelime başı eşleşmesi. 'kola' -> 'cikolata' yanlış eşleşmesini önler,
+    ama 'pizza' -> 'pizzalar' (ek almış hali) doğru eşleşir."""
+    return any(word.startswith(token) for word in text_norm.split())
+
+
 def item_text(item: dict[str, Any]) -> str:
     return " ".join(
         [
@@ -389,7 +395,7 @@ def calculate_business_score(item: dict[str, Any], semantic_score: float, intent
     ]
     if query_tokens:
         item_name_norm = normalize_text(item.get("item_name"))
-        literal_hits = sum(1 for token in query_tokens if token in item_name_norm)
+        literal_hits = sum(1 for token in query_tokens if token_starts_word(token, item_name_norm))
         if literal_hits:
             score += min(literal_hits, 2) * 0.35
 
@@ -607,7 +613,7 @@ def recommend(
         }
         for it in engine.items:
             name_norm = normalize_text(it.get("item_name"))
-            if any(token in name_norm for token in query_tokens):
+            if any(token_starts_word(token, name_norm) for token in query_tokens):
                 key = (normalize_text(it.get("platform")),
                        normalize_text(it.get("restaurant_name")), name_norm)
                 if key not in seen_keys:
@@ -627,7 +633,7 @@ def recommend(
     if apply_relevance:
         def _row_relevant(row):
             name = normalize_text(row.get("item_name"))
-            if any(token in name for token in query_tokens):
+            if any(token_starts_word(token, name) for token in query_tokens):
                 return True
             row_category = normalize_text(row.get("category"))
             for category in detected_categories:
