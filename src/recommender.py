@@ -67,11 +67,15 @@ LACTOSE_CATEGORIES = {"tatli", "pizza"}
 DRINK_WORDS = [
     "su", "ayran", "kola", "pepsi", "fanta", "sprite", "ice tea", "fuse tea",
     "limonata", "soda", "maden suyu", "şalgam", "salgam", "cola", "zero sugar",
+    "gazoz", "meşrubat", "mesrubat", "milkshake", "shake", "smoothie", "espresso",
+    "americano", "cappuccino", "mocha", "latte", "meyve suyu", "churchill", "erikli",
 ]
 
 ADDON_WORDS = [
     "sos", "ketçap", "ketcap", "mayonez", "ranch", "barbekü", "barbeku",
     "acı sos", "aci sos", "cheddar sos", "ekstra", "peçete", "pecete",
+    "hardal", "sarımsaklı sos", "sarimsakli sos", "bbq sos", "nar ekşisi", "nar eksisi",
+    "çiğ sos", "cig sos",
 ]
 
 DESSERT_WORDS = [
