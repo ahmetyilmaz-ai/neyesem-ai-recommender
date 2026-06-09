@@ -1,6 +1,6 @@
 {
   "model_name": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
-  "item_count": 2857,
+  "item_count": 30808,
   "embedding_dim": 384,
   "faiss_available": false
 }
