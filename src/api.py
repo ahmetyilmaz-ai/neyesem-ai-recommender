@@ -18,6 +18,11 @@ async def lifespan(app: FastAPI):
         app.state.recommender_engine = load_recommender()
         app.state.recommender_ready = True
         app.state.recommender_error = None
+        # Ana sayfa cache'ini başlangıçta ısıt -> ilk /homepage isteği de anlık döner.
+        try:
+            generate_homepage_recommendations(limit=8)
+        except Exception:
+            pass
     except Exception as exc:
         app.state.recommender_engine = None
         app.state.recommender_ready = False

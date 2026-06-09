@@ -1,5 +1,6 @@
 ﻿import argparse
 import json
+from functools import lru_cache
 from pathlib import Path
 
 import pandas as pd
@@ -314,7 +315,10 @@ def make_section(title, description, df, score_column="homepage_score", limit=8)
     }
 
 
+@lru_cache(maxsize=16)
 def generate_homepage_recommendations(limit=8):
+    # Ana sayfa cold-start önerisi herkese aynıdır (kullanıcıya özel değil), bu yüzden
+    # sonuç limit'e göre cache'lenir. İlk istek 30k ürünü işler (~birkaç sn), sonrakiler anlık.
     df = load_items()
 
     df = df[df.apply(is_clean_homepage_item, axis=1)].copy()
