@@ -596,11 +596,10 @@ def recommend(
     # eşleşen ürünler bulunuyorsa, sadece onları göster (ör. "iskender" -> sadece iskender).
     # Hiç eşleşme yoksa (veride olmayan yemek) semantik sonuçlara düşülür; boş ekran olmaz.
     detected_categories = intent.get("categories") or []
-    # Filtreyi yalnızca dish/kategori sorgularında uygula. "yüksek proteinli ucuz" gibi
-    # tercih cümlelerinde should_drop_item zaten alakayı sağlar; literal filtre fazla daraltır.
-    apply_relevance = bool(detected_categories) or (
-        intent.get("preference") == "balanced" and bool(query_tokens)
-    )
+    # Filtreyi YALNIZCA bilinen kategori sorgularında uygula (tavuk, pizza, tatlı...).
+    # "acıktım" gibi belirsiz kelimelerde / serbest cümlelerde filtre uygulanmaz:
+    # hibrit retrieval + boost zaten alakalı ürünü öne çıkarır, çeşitlilik korunur.
+    apply_relevance = bool(detected_categories)
     if apply_relevance:
         def _row_relevant(row):
             name = normalize_text(row.get("item_name"))
