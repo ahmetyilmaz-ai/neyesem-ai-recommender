@@ -1,12 +1,20 @@
 """
-Sahte / şüpheli indirim tespiti — PLATFORMLAR ARASI temelli.
+Sahte / şüpheli indirim tespiti — PİYASA REFERANSLI.
 
-Asıl sinyal: bir platform "%X indirim!" diyor ama AYNI ürün başka platformda,
-indirimsiz, bu "indirimli" fiyattan daha ucuza satılıyorsa indirim yanıltıcıdır.
-(Kategori ortalaması kıyası yanıltıcıydı: aile boyu/premium ürünler normal indirimle
-bile "şüpheli" görünüyordu — o yaklaşım bırakıldı.)
+Kavram: Gerçek "sahte indirim", bir restoranın üstü-çizili ESKİ FİYATINI şişirip
+göstermelik indirim sunmasıdır ("350'ydi 297 oldu!" ama ürün hiç 350 değildi).
+Bunu dürüstçe yargılamanın yolu, o ürünün PİYASA FİYATINI bilmektir: aynı ürünün
+(boyut-duyarlı) tüm ilanlarının MEDYANI = gerçekçi piyasa fiyatı.
 
-Ek sinyaller: absürt markup (orijinal >> indirimli) ve gerçekçi olmayan indirim oranı.
+Ana sinyaller:
+  1) Şişirilmiş referans : üstü-çizili "eski fiyat" >> piyasa medyanı.
+  2) İndirimli ama pahalı: "indirimli" fiyat bile piyasa medyanının üstünde.
+Yan sinyaller:
+  3) Absürt markup (eski/yeni >= 3x) ve  4) gerçekçi olmayan indirim oranı.
+
+Not: "Başka platformda daha ucuz" tek başına SAHTE indirim DEĞİLDİR (o restoranın
+indirimi kendi içinde gerçek olabilir); bu yüzden o bilgi yalnızca DESTEKLEYİCİ
+kanıt olarak taşınır, ana karar piyasa medyanına dayanır.
 """
 
 import re
@@ -38,25 +46,39 @@ def _normalize(value: Any) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
-# Aynı ürün başka platformda en fazla bu kadar ucuz olabilir; daha fazlası
-# (ör. 99 TL "Ayran 1lt" vs 7 TL küçük ayran) farklı ürün/boyut eşleşmesidir.
+# Piyasa medyanı güvenilir olsun diye o üründen en az bu kadar ilan gerek.
+MIN_MARKET_SAMPLE = 4
+# Üstü-çizili eski fiyat, piyasa medyanının bu katından fazlaysa "şişirilmiş referans".
+INFLATED_REF_FACTOR = 1.6
+# "İndirimli" fiyat bile piyasa medyanının bu katından fazlaysa indirim göstermelik.
+STILL_ABOVE_FACTOR = 1.15
+# Aynı ürün başka platformda en fazla bu kadar ucuz olabilir (destekleyici kanıt sınırı);
+# ötesi farklı boyut/ürün eşleşmesidir.
 MAX_CROSS_PLATFORM_RATIO = 2.5
 
+ABSURD_MARKUP_FACTOR = 3.0    # eski / indirimli oranı
+IMPLAUSIBLE_DISCOUNT = 70.0   # % üstü şüpheli (yemekte nadiren gerçek)
 
-ABSURD_MARKUP_FACTOR = 3.0    # orijinal / indirimli oranı
-IMPLAUSIBLE_DISCOUNT = 60.0   # % üstü şüpheli
+# Zayıf-tek-sinyalleri elemek için: en az bu skora ulaşan ilanlar raporlanır.
+MIN_REPORT_SCORE = 1.5
 
 
 def detect_suspicious_discounts(items: list[dict[str, Any]], limit: int = 20) -> dict[str, Any]:
-    # Aynı ürünün (normalize ad) tüm platform/restoran fiyatlarını topla.
+    # Aynı ürünün (boyut-duyarlı normalize ad) tüm ilanlarını topla → piyasa referansı.
     product_listings: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for item in items:
         price = _safe_float(item.get("price"))
         if price and price > 0:
             product_listings[_normalize(item.get("item_name"))].append(
                 {"price": price, "platform": item.get("platform"),
-                 "restaurant": item.get("restaurant_name"), "item": item}
+                 "restaurant": item.get("restaurant_name")}
             )
+
+    # Her ürün için piyasa medyanı + örnek sayısı (gerçekçi "asıl fiyat").
+    market: dict[str, dict[str, Any]] = {}
+    for key, listings in product_listings.items():
+        prices = [lst["price"] for lst in listings]
+        market[key] = {"median": median(prices), "count": len(prices)}
 
     flagged: list[dict[str, Any]] = []
 
@@ -73,47 +95,58 @@ def detect_suspicious_discounts(items: list[dict[str, Any]], limit: int = 20) ->
         if not claims_discount:
             continue
 
+        name_key = _normalize(item.get("item_name"))
+        ref = market.get(name_key, {})
+        med = ref.get("median")
+        sample = ref.get("count", 0)
+        reliable_market = med is not None and med > 0 and sample >= MIN_MARKET_SAMPLE
+
         reasons: list[str] = []
         score = 0.0
-        cheaper_alt = None
 
-        # 1) PLATFORMLAR ARASI: aynı ürün başka platformda bu indirimli fiyattan ucuz mu?
-        name_key = _normalize(item.get("item_name"))
+        # 1) ŞİŞİRİLMİŞ REFERANS: üstü-çizili eski fiyat piyasanın çok üstünde.
+        if reliable_market and original is not None and original >= med * INFLATED_REF_FACTOR:
+            reasons.append(
+                f"'Eski fiyat' {original:.0f} TL gösteriliyor ama bu ürünün piyasa "
+                f"fiyatı ~{med:.0f} TL — referans fiyat şişirilmiş, indirim göstermelik."
+            )
+            score += 2.0 + min((original / med) - 1.0, 3.0)
+
+        # 2) İNDİRİMLİ AMA HÂLÂ PAHALI: indirimli fiyat bile piyasanın üstünde.
+        if reliable_market and price >= med * STILL_ABOVE_FACTOR:
+            reasons.append(
+                f"'İndirimli' fiyat {price:.0f} TL, piyasa medyanı ~{med:.0f} TL'nin "
+                f"üstünde — indirim gerçek bir avantaj sağlamıyor."
+            )
+            score += 1.5 + min((price / med) - 1.0, 2.0)
+
+        # 3) ABSÜRT MARKUP (piyasa verisi olmadan da çalışır)
+        if original is not None and original > price * ABSURD_MARKUP_FACTOR:
+            reasons.append(
+                f"Eski fiyat ({original:.0f} TL) indirimli fiyatın {original / price:.1f} "
+                f"katı — şişirilmiş referans fiyat işareti."
+            )
+            score += 1.0
+
+        # 4) Gerçekçi olmayan indirim oranı (zayıf yan sinyal)
+        if discount is not None and discount >= IMPLAUSIBLE_DISCOUNT:
+            reasons.append(f"%{discount:.0f} indirim yemek için gerçekçi değil.")
+            score += 0.5
+
+        # DESTEKLEYİCİ KANIT (karar verici değil): aynı ürün başka platformda daha ucuz mu?
+        cheaper_alt = None
         listings = product_listings.get(name_key, [])
-        platforms = {lst["platform"] for lst in listings}
-        if len(platforms) >= 2:
+        if len({lst["platform"] for lst in listings}) >= 2:
             elsewhere = [
                 lst for lst in listings
                 if lst["platform"] != item.get("platform")
                 and lst["price"] < price
-                # Makul aralık: gerçekten aynı ürün ~2.5x'ten fazla ucuz olmaz;
-                # ötesi farklı boyut/ürün eşleşmesi (yanlış pozitif) demektir.
                 and lst["price"] >= price / MAX_CROSS_PLATFORM_RATIO
             ]
             if elsewhere:
-                cheapest = min(elsewhere, key=lambda x: x["price"])
-                cheaper_alt = cheapest
-                reasons.append(
-                    f"Aynı ürün {cheapest['platform']} platformunda indirimsiz "
-                    f"{cheapest['price']:.0f} TL — bu '%{(discount or 0):.0f} indirim' "
-                    f"aslında daha pahalı."
-                )
-                score += 3.0 + (price - cheapest["price"]) / max(price, 1)
+                cheaper_alt = min(elsewhere, key=lambda x: x["price"])
 
-        # 2) Absürt markup
-        if original is not None and original > price * ABSURD_MARKUP_FACTOR:
-            reasons.append(
-                f"Orijinal fiyat ({original:.0f} TL) indirimli fiyatın "
-                f"{original / price:.1f} katı — şişirilmiş referans fiyat olabilir."
-            )
-            score += 1.5
-
-        # 3) Gerçekçi olmayan indirim oranı
-        if discount is not None and discount >= IMPLAUSIBLE_DISCOUNT:
-            reasons.append(f"%{discount:.0f} indirim yemek için gerçekçi değil.")
-            score += 1.0
-
-        if reasons:
+        if reasons and score >= MIN_REPORT_SCORE:
             flagged.append(
                 {
                     "platform": item.get("platform"),
@@ -124,7 +157,10 @@ def detect_suspicious_discounts(items: list[dict[str, Any]], limit: int = 20) ->
                     "original_price": round(original, 2) if original else None,
                     "discount_rate": round(discount, 2) if discount else None,
                     "product_url": item.get("product_url"),
-                    # cross-platform karşılaştırma bilgisi (mobil gösterebilir)
+                    # Piyasa referansı (mobil "Piyasa ~X TL" diye gösterebilir)
+                    "market_median": round(med, 2) if reliable_market else None,
+                    "market_sample": sample,
+                    # Destekleyici cross-platform kanıt
                     "cheaper_platform": cheaper_alt["platform"] if cheaper_alt else None,
                     "cheaper_price": round(cheaper_alt["price"], 2) if cheaper_alt else None,
                     "suspicion_score": round(score, 2),
@@ -136,7 +172,7 @@ def detect_suspicious_discounts(items: list[dict[str, Any]], limit: int = 20) ->
 
     return {
         "type": "suspicious_discount_report",
-        "description": "Platformlar arası kıyasla yanıltıcı/sahte görünen indirimler.",
+        "description": "Piyasa fiyatına göre yanıltıcı/şişirilmiş görünen indirimler.",
         "total_scanned": len(items),
         "suspicious_count": len(flagged),
         "items": flagged[:limit],
